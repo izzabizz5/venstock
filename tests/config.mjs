@@ -1,8 +1,9 @@
 // The one setting the test harness has: how to start the app locally.
 // Step 2 (Worker conversion) changes only this file; the tests themselves stay the same.
-export function serverCommand({ port, persistTo }) {
+// inspectorPort: each test server needs its own, or servers started in parallel clash.
+export function serverCommand({ port, inspectorPort, persistTo }) {
   return ["npx", ["--no-install", "wrangler", "dev",
-    "--ip", "127.0.0.1", "--port", String(port), "--persist-to", persistTo]];
+    "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", String(inspectorPort), "--persist-to", persistTo]];
 }
 
 // How the local database is seeded before the server starts (always --local).

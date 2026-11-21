@@ -1209,6 +1209,7 @@ document.addEventListener("click", (e) => {
   if (d.saverestock !== undefined) {
     const items = Object.entries(state.restock).map(([id, qty]) => ({ id: Number(id), qty })).filter((i) => i.qty);
     if (!items.length) { toast("Enter a quantity for at least one item."); return; }
+    if (items.some((i) => i.qty < 1)) { toast("Restock adds stock: use whole numbers above zero. To lower a count, edit the item."); return; }
     run(async () => {
       await api("items/restock", { method: "POST", body: { items } });
       state.restock = {}; state.restockSearch = ""; closeModal(false);

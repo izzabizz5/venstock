@@ -83,7 +83,8 @@ export async function startServer({ users = [USERS.admin], seedSql = "" } = {}) 
   runLocal(...d1ExecuteCommand({ persistTo, file: seedFile }));
 
   const port = await freePort();
-  const [cmd, args] = serverCommand({ port, persistTo });
+  const inspectorPort = await freePort();
+  const [cmd, args] = serverCommand({ port, inspectorPort, persistTo });
   assertLocal(args);
   let log = "";
   const child = spawn(cmd, args, { cwd: ROOT, detached: true, stdio: ["ignore", "pipe", "pipe"] });
