@@ -1,5 +1,5 @@
 // Caches the app shell so it opens with no signal. Data is handled in app.js.
-const CACHE = "venstock-v10";
+const CACHE = "venstock-v11";
 const SHELL = ["/", "/app.js", "/style.css", "/manifest.webmanifest", "/vendor/qrcode.js"];
 
 self.addEventListener("install", (e) => {

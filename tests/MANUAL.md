@@ -28,6 +28,14 @@ Needs two vendors (step 6's `create-tenant.mjs` creates them; until then this ca
    becomes unknown. Reload once (the page shows the 404), then go offline, close and reopen the tab.
    Expected: the app opens from the cache; the 404 page did not replace it.
 
+## Editing an item that no longer exists shows a clear message
+1. Log in at `http://demo.localhost:8788/`, open Items, and leave the page open.
+2. In a terminal, delete one item from the local vendor database (a throwaway one), e.g. with
+   `node --input-type=module -e` and `scripts/lib/local-d1.mjs`, or recreate the local state.
+3. Without reloading, change that item's price and press Save. Expected: an alert saying the item isn't in your
+   shop any more and the change wasn't saved (not a bare "Not found"); after closing it, the item is gone from the
+   list. Restocking the same stale item shows the same message.
+
 ## Results
 | Check | Browser and version | Date | Result |
 |---|---|---|---|

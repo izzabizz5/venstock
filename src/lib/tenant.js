@@ -54,6 +54,10 @@ export async function resolveVendor(env, hostname, { registry = defaultRegistry,
   if (row.status === "suspended") return { kind: "suspended", tenant };
   if (row.status !== "active") return { kind: "refused", reason: `tenant ${row.id} has unknown status ${row.status}` };
 
+  // Always `binding` (derived from the numeric id), never row.db_binding. After the equality check above they are the
+  // same string, so this looks redundant, and a mutation test confirms swapping them changes nothing today. It stays
+  // deliberately: the database a request reaches must never be chosen by a value stored in the registry. If the check
+  // above is ever loosened or reordered, this line still can't be steered by a tampered row.
   const db = env[binding];
   if (!db) return { kind: "settingUp", tenant };
   if (!verified.has(row.id)) {

@@ -59,7 +59,7 @@ Tests (no dependencies; every test uses its own throwaway local databases):
 ```bash
 node --test tests/<file>.test.mjs   # while iterating: only the file(s) for the code you changed
 npm run test:fast                   # tests/**/*.unit.test.mjs: no wrangler, a few seconds
-npm run test:full                   # everything (about 2-3 minutes): before each commit and at STOP points
+npm run test:full                   # everything (about 1 minute): before each commit and at STOP points
 ```
 - `*.unit.test.mjs` must never start wrangler or open a database. Anything that does belongs in a plain `*.test.mjs`.
 - Mutation checks (break a rule, confirm a test fails) only for isolation-critical code: the resolver, the identity
@@ -92,6 +92,11 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   cancel vendor B's data (by id, and through B's hostname with A's cookie). It must fail.
 - Never commit secrets, `.dev.vars`, `.env`, `.wrangler/` or `.wrangler-generated/`.
 - Keep changes small: one logical change per commit.
+- Test runs: while iterating, run only the test file(s) for the code you changed, or `npm run test:fast`. Run
+  `npm run test:full` before every commit and at every STOP point, never after every edit. Mutation checks only for
+  isolation-critical code (the resolver, the identity check, the binding derivation, the lockdown), not for routine
+  steps such as the migration runner or scripts. Never weaken an assertion to make a test faster; a test that can't
+  be fast belongs in `test:full` (a plain `*.test.mjs`), and say so.
 
 ## Project layout
 - `wrangler.toml`: Worker name, entry point, static assets (`run_worker_first = true`), dev port 8788,

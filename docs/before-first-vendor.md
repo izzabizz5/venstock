@@ -94,3 +94,13 @@ cd / && rm -rf /tmp/venstock-drill
 
 | Date | wrangler version | Result |
 |---|---|---|
+
+## 7. Registry changes take up to 45 seconds to reach every request
+The Worker caches each hostname's registry lookup for 45 seconds in each isolate (`src/lib/control.js`), and it
+caches "no such vendor" too, so a flood of requests for made-up subdomains doesn't reach the control database.
+- A **new vendor** can answer 404 for up to 45 seconds after `create-tenant` finishes (if anyone visited the
+  subdomain just before), on top of the redeploy it needs for its database binding.
+- A **suspension** (or unsuspension) can take up to 45 seconds to apply everywhere. Each isolate caches separately,
+  so for a short while some requests may see the old status and some the new one.
+- Onboarding and support scripts should say so ("live within a minute"), and anything urgent, such as cutting off
+  an abusive account, has to allow for the window.

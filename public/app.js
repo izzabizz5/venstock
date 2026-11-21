@@ -1116,6 +1116,16 @@ function softRender() {
   render();
 }
 
+// An item edit or restock answered 404: the item isn't in this shop's data any more (for example, the shop's data was
+// restored from a backup). Say so plainly, and reload the list so the stale item disappears from this screen.
+async function itemGone(e) {
+  if (e.status !== 404) throw e;
+  await refresh().catch(() => {});
+  const err = new Error("This item isn't in your shop any more, so the change wasn't saved. The item list has been reloaded.");
+  err.status = 404;
+  throw err;
+}
+
 async function run(fn, okMsg) {
   try { await fn(); await refresh(); state.online = true; if (okMsg) toast(okMsg); }
   catch (e) { if (e.status !== 401) alert(errText(e)); }
@@ -1211,7 +1221,7 @@ document.addEventListener("click", (e) => {
     if (!items.length) { toast("Enter a quantity for at least one item."); return; }
     if (items.some((i) => i.qty < 1)) { toast("Restock adds stock: use whole numbers above zero. To lower a count, edit the item."); return; }
     run(async () => {
-      await api("items/restock", { method: "POST", body: { items } });
+      await api("items/restock", { method: "POST", body: { items } }).catch(itemGone);
       state.restock = {}; state.restockSearch = ""; closeModal(false);
     }, `Restocked ${items.length} item${items.length === 1 ? "" : "s"}`);
     return;
@@ -1237,7 +1247,7 @@ document.addEventListener("click", (e) => {
     const f = (n) => row.querySelector(`[data-f="${n}"]`);
     run(() => api(`items/${d.save}`, { method: "PUT", body: {
       name: f("name").value, category: f("category").value, sku: f("sku").value, price_cents: toCents(f("price").value),
-      stock: parseInt(f("stock").value || 0, 10), active: f("active").checked } }), "Saved");
+      stock: parseInt(f("stock").value || 0, 10), active: f("active").checked } }).catch(itemGone), "Saved");
     return;
   }
   if (d.template !== undefined) { downloadText("items-template.csv", "name,category,sku,price,stock\nTee - Medium,Apparel,,5.00,1\n"); return; }

@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "description": "Offline-first point of sale for vendor shows. No dependencies: wrangler runs through npx.",
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "test:fast": "node --test \"tests/**/*.unit.test.mjs\"",
     "test:full": "node --test \"tests/**/*.test.mjs\""
