@@ -399,6 +399,9 @@ export async function handleApi({ request, db, tenant, params }) {
 
     return fail("Not found", 404);
   } catch (e) {
-    return fail(String(e.message || e), 500);
+    // Never send error details to the browser (they can include SQL or internals). The log gets what's needed to find
+    // the cause: method, path, vendor and the error. Never the request body (customer notes, passwords).
+    console.error(`venstock: 500 ${m} ${url.pathname} tenant=${tenant?.id ?? "?"}: ${e?.stack || e}`);
+    return fail("Something went wrong", 500);
   }
 }

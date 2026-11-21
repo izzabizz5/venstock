@@ -28,39 +28,50 @@ const SETTING_UP_PAGE = `<!doctype html>
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-    const api = isApi(url.pathname);
-    const v = await resolveVendor(env, url.hostname);
-
-    switch (v.kind) {
-      case "notFound":
-        return plain(404, "Not found", api);
-      case "refused":
-        console.error(`venstock: refused ${url.hostname}: ${v.reason}`);
-        return plain(500, "Something went wrong", api);
-      case "settingUp":
-        return api
-          ? Response.json({ error: "This shop is being set up. Try again in a few minutes." }, { status: 503, headers: { ...NO_STORE, "retry-after": "120" } })
-          : new Response(SETTING_UP_PAGE, { status: 503, headers: { "content-type": "text/html; charset=utf-8", ...NO_STORE, "retry-after": "120" } });
-      case "suspended":
-        if (!api) return env.ASSETS.fetch(request);
-        return Response.json({ error: "This account is suspended. Contact Venstock support." }, { status: 403, headers: NO_STORE });
-      case "active":
-        break;
-      default:
-        console.error(`venstock: unexpected resolver result ${v.kind}`);
-        return plain(500, "Something went wrong", api);
-    }
-
-    if (!api) return env.ASSETS.fetch(request);
-    // The decoded path segments after /api (the same shape Pages Functions gave [[route]].js).
-    let route;
     try {
-      route = url.pathname.slice(4).split("/").filter(Boolean).map(decodeURIComponent);
-    } catch {
-      return Response.json({ error: "Not found" }, { status: 404 });
+      return await serve(request, env);
+    } catch (e) {
+      // Anything unexpected (e.g. the control database unreachable): a generic answer, details only in the log.
+      const url = new URL(request.url);
+      console.error(`venstock: 500 ${request.method} ${url.hostname}${url.pathname}: ${e?.stack || e}`);
+      return plain(500, "Something went wrong", isApi(url.pathname));
     }
-    // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.
-    return handleApi({ request, db: v.db, tenant: v.tenant, params: { route } });
   },
 };
+
+async function serve(request, env) {
+  const url = new URL(request.url);
+  const api = isApi(url.pathname);
+  const v = await resolveVendor(env, url.hostname);
+
+  switch (v.kind) {
+    case "notFound":
+      return plain(404, "Not found", api);
+    case "refused":
+      console.error(`venstock: refused ${url.hostname}: ${v.reason}`);
+      return plain(500, "Something went wrong", api);
+    case "settingUp":
+      return api
+        ? Response.json({ error: "This shop is being set up. Try again in a few minutes." }, { status: 503, headers: { ...NO_STORE, "retry-after": "120" } })
+        : new Response(SETTING_UP_PAGE, { status: 503, headers: { "content-type": "text/html; charset=utf-8", ...NO_STORE, "retry-after": "120" } });
+    case "suspended":
+      if (!api) return env.ASSETS.fetch(request);
+      return Response.json({ error: "This account is suspended. Contact Venstock support." }, { status: 403, headers: NO_STORE });
+    case "active":
+      break;
+    default:
+      console.error(`venstock: unexpected resolver result ${v.kind}`);
+      return plain(500, "Something went wrong", api);
+  }
+
+  if (!api) return env.ASSETS.fetch(request);
+  // The decoded path segments after /api (the same shape Pages Functions gave [[route]].js).
+  let route;
+  try {
+    route = url.pathname.slice(4).split("/").filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
+  // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.
+  return handleApi({ request, db: v.db, tenant: v.tenant, params: { route } });
+}

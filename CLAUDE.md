@@ -13,8 +13,9 @@ where **each vendor has its own D1 database**:
 - a request's hostname `<slug>.<BASE_DOMAIN>` → registry → `DB_T<id>` → that one database. Nothing else.
 
 **In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist, and
-`handleApi` receives only `{ request, db, tenant, params }`, and every API area (auth, items, settings, shows,
-sales, users) has cross-vendor tests. Old names (`show-pos`, `show-pos-db`, "show pos") still appear.
+`handleApi` receives only `{ request, db, tenant, params }` (locked down, with source tests), every API area (auth,
+items, settings, shows, sales, users) has cross-vendor tests, and failed uploads have their own screen. Next: the
+platform admin login, support sessions, docs. Old names (`show-pos`, `show-pos-db`, "show pos") still appear.
 
 **Registry cache:** the Worker caches each hostname's registry lookup in the isolate for 45 seconds
 (`src/lib/control.js`), unknown vendors included. A suspension, unsuspension or new vendor takes effect within
@@ -87,6 +88,11 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - The vendor comes only from the request's hostname (via the control registry), never from the request body, URL
   path or query string. Request handlers receive only that vendor's database; they never get `env`, so they can't
   reach `CONTROL` or another vendor's binding.
+  Enforced by `tests/lockdown.unit.test.mjs`: only `src/worker.js`, `src/lib/tenant.js` and `src/lib/control.js`
+  mention `env`; only `tenant.js` reads `env[...]` (the derived binding); only `control.js` touches `CONTROL`;
+  `handleApi` gets exactly `{ request, db, tenant, params }`. A new file in `src/` must be added to that test.
+- Server errors answer a generic "Something went wrong" (500). Details go to the log only: method, path, vendor id
+  and the error, never request bodies (customer notes, passwords) and never `e.message` in a response.
 - Schema changes are new numbered files in `migrations/vendor/` or `migrations/control/`, recorded with
   `node scripts/migrations-manifest.mjs --update`. Never edit a migration that has been applied anywhere; entries
   recorded at the latest `release-*` tag can never change.
