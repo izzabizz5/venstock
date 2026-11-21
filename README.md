@@ -67,7 +67,7 @@ See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant
 
 ### Run it locally
 ```bash
-npx wrangler d1 execute DB --local --file=schema.sql      # first time only: create the local tables
+npx wrangler d1 execute DB --local --file=migrations/vendor/0001_baseline.sql   # first time only
 node scripts/add-admin.mjs you@example.com                # first time only: prints your invite link
 npx wrangler dev                                          # then open http://localhost:8788
 ```
@@ -79,12 +79,14 @@ Locked out locally? Run the `add-admin.mjs` command again for a fresh invite.
 prints which database it is about to touch.
 
 ### Database changes
-`schema.sql` is the full schema for a fresh database. Changes go in a new numbered file in `migrations/`
-(next number after the highest one), and `schema.sql` is updated to match. Apply one locally with:
+Each vendor will have its own database (being built; see CLAUDE.md). Schema changes are new numbered files in
+`migrations/vendor/` (every vendor database) or `migrations/control/` (the vendor registry). Record each new file's
+checksum, then apply:
 ```bash
-npx wrangler d1 execute DB --local --file=migrations/NNN_name.sql
+node scripts/migrations-manifest.mjs --update   # commit checksums.json with the migration
+node scripts/migrate.mjs                        # control, then every vendor database (local)
 ```
-Never edit a migration that already exists.
+Never edit a migration that already exists, and keep migrations backward compatible. See `migrations/README.md`.
 
 ### Tests
 ```bash
@@ -103,5 +105,5 @@ database Venstock may use is `venstock-dev`.
 - `src/api.js`: the API: items, shows, sales, settings, CSV export.
 - `src/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
 - `tests/`: automated tests (`node --test`) and `tests/MANUAL.md` for browser checks.
-- `schema.sql` and `migrations/`: the database schema.
+- `migrations/`: the database schema as numbered migrations (`control/`, `vendor/`), applied by `scripts/migrate.mjs`.
 - `scripts/add-admin.mjs`: creates or resets an admin and prints an invite code (local by default).

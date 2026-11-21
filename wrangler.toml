@@ -16,3 +16,11 @@ port = 8788
 binding = "DB"
 database_name = "<>"
 database_id = "<>"
+
+# The control database: the vendor registry and Venstock staff. Vendor databases (DB_T<id>) are never listed here;
+# scripts write them into .wrangler-generated/ from the registry. Remote name must stay venstock-dev-control; set
+# database_id after creating it (you, not Claude).
+[[d1_databases]]
+binding = "CONTROL"
+database_name = "venstock-dev-control"
+database_id = "<>"

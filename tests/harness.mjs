@@ -1,7 +1,7 @@
 // Test harness: starts the app on a throwaway local database, seeds users, and gives tests an HTTP client
 // that keeps cookies and can log in with password + 6-digit code. No dependencies; local only.
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -75,11 +75,15 @@ function runLocal(cmd, args) {
   return r.stdout;
 }
 
-// Starts the app on a fresh local database. `seedSql` runs after schema.sql.
+// The vendor schema: every file in migrations/vendor/, in order (schema.sql is gone; migrations are the source).
+export const vendorSchemaSql = () => readdirSync(join(ROOT, "migrations", "vendor")).filter((f) => f.endsWith(".sql")).sort()
+  .map((f) => readFileSync(join(ROOT, "migrations", "vendor", f), "utf8")).join("\n");
+
+// Starts the app on a fresh local database (the vendor schema), then `users`, then `seedSql`.
 export async function startServer({ users = [USERS.admin], seedSql = "" } = {}) {
   const persistTo = mkdtempSync(join(tmpdir(), "venstock-test-"));
   const seedFile = join(persistTo, "seed.sql");
-  writeFileSync(seedFile, readFileSync(join(ROOT, "schema.sql"), "utf8") + "\n" + users.map(userInsertSql).join("\n") + "\n" + seedSql);
+  writeFileSync(seedFile, vendorSchemaSql() + "\n" + users.map(userInsertSql).join("\n") + "\n" + seedSql);
   runLocal(...d1ExecuteCommand({ persistTo, file: seedFile }));
 
   const port = await freePort();

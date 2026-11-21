@@ -41,3 +41,56 @@ those logs.
   alerts a person.
 - Alerts for repeated 5xx responses and for unusual numbers of rejected sales.
 - A way to tie a vendor's "it didn't work" report to the logged error.
+
+## 6. Drill: a remote migration that fails halfway keeps nothing
+Locally, a failing migration file is rolled back completely (tested in `tests/migrate.test.mjs`). Cloudflare
+documents the same for `wrangler d1 migrations apply` remotely ("this migration will be rolled back"), and
+`scripts/migrate.mjs` relies on it. Prove it once on a throwaway remote database before the first vendor.
+**You run this; Claude never runs remote commands.** It uses its own folder outside the repo, so it can't touch any
+real vendor or the registry.
+
+```bash
+# 0. A scratch folder, outside the repo
+mkdir -p /tmp/venstock-drill/migrations && cd /tmp/venstock-drill
+
+# 1. Create the throwaway database; note the database_id it prints
+npx wrangler d1 create venstock-dev-t99
+
+# 2. A config for just this database (paste the id from step 1)
+cat > wrangler.toml <<'EOF'
+name = "venstock-drill"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB_T99"
+database_name = "venstock-dev-t99"
+database_id = "PASTE-THE-ID-FROM-STEP-1"
+migrations_dir = "migrations"
+EOF
+
+# 3. One good migration, and one that fails on its 3rd statement (a duplicate value in a UNIQUE column)
+printf 'CREATE TABLE drill_ok (x INTEGER);\n' > migrations/0001_ok.sql
+printf 'CREATE TABLE drill_partial (x INTEGER UNIQUE);\nINSERT INTO drill_partial VALUES (1);\nINSERT INTO drill_partial VALUES (1);\n' > migrations/0002_fails_halfway.sql
+
+# 4. Apply: expect 0001_ok.sql to succeed and 0002_fails_halfway.sql to fail with a UNIQUE constraint error
+npx wrangler d1 migrations apply venstock-dev-t99 --remote
+
+# 5. Check: drill_ok and d1_migrations exist; drill_partial must NOT exist
+npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+
+# 6. Check: only 0001_ok.sql is recorded as applied
+npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT name FROM d1_migrations ORDER BY id"
+
+# 7. Clean up: delete the throwaway database (it asks you to confirm) and the scratch folder
+npx wrangler d1 delete venstock-dev-t99
+cd / && rm -rf /tmp/venstock-drill
+```
+
+- **Pass:** step 5 lists `d1_migrations` and `drill_ok` but not `drill_partial`, and step 6 lists only `0001_ok.sql`.
+- **Fail:** `drill_partial` exists (with or without a row), or `0002_fails_halfway.sql` is recorded as applied.
+  Stop: the runner's "one file is all or nothing" assumption doesn't hold remotely, and migrations would have to be
+  written to be safe to re-run before any vendor is onboarded.
+- Record the result below.
+
+| Date | wrangler version | Result |
+|---|---|---|
