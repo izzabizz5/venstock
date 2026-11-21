@@ -66,15 +66,14 @@ Requires Node.js 22.13 or later. Nothing to install: `package.json` only holds t
 See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant isolation, migrations).
 
 ### Run it locally
-Venstock is mid-conversion to one database per vendor (see CLAUDE.md). The vendor scripts work today:
+Each vendor has its own database and lives at its own subdomain (`<slug>.localhost` locally):
 ```bash
-node scripts/migrate.mjs --control                                    # first time only: the vendor registry
-node scripts/create-tenant.mjs demo "Demo Shop" you@example.com       # a vendor with its own database + invite
-node scripts/add-admin.mjs --tenant demo you@example.com              # add or reset an admin (locked out? run again)
+node scripts/migrate.mjs --control                                  # first time only: the vendor registry
+node scripts/create-tenant.mjs demo "Demo Shop" you@example.com     # a vendor with its own database + invite link
+npx wrangler dev -c .wrangler-generated/local/wrangler.toml --persist-to .wrangler/state
 ```
-The Worker itself still reads the single interim `DB` database until the hostname resolver lands, so for now
-`npx wrangler dev` serves an app with no way to sign in locally; use the tests. This section will say
-`npx wrangler dev -c .wrangler-generated/local/wrangler.toml` and `http://demo.localhost:8788` once that is done.
+Open the invite link (`http://demo.localhost:8788/#invite=…`), set a password, and scan the QR code with an
+authenticator app. Locked out? `node scripts/add-admin.mjs --tenant demo you@example.com` prints a fresh invite.
 
 Every script is local unless you pass `--remote`, and then it only touches databases named `venstock-dev-control`
 or `venstock-dev-t<id>`. Each prints which databases it is about to touch.

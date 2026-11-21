@@ -7,7 +7,8 @@ import { join, relative } from "node:path";
 export const LOCAL_CONTROL = { name: "venstock-local-control", id: "local-control" };
 export const localVendorDb = (id) => ({ name: `venstock-local-t${id}`, id: `local-t${id}` });
 export const remoteVendorDbName = (id) => `venstock-dev-t${id}`;
-export const vendorBinding = (id) => `DB_T${id}`;
+import { vendorBinding } from "../../src/lib/tenant.js"; // one definition, shared with the Worker
+export { vendorBinding };
 
 // Minimal reader for the committed wrangler.toml: top-level keys, [vars], [dev], and [[d1_databases]] blocks.
 export function readBaseToml(path) {

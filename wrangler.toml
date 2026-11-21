@@ -12,10 +12,10 @@ run_worker_first = true
 [dev]
 port = 8788
 
-[[d1_databases]]
-binding = "DB"
-database_name = "<>"
-database_id = "<>"
+# Vendors live at <slug>.<BASE_DOMAIN>. Locally that is <slug>.localhost:8788. Set the real domain before any deploy
+# (you, not Claude); with "localhost" deployed, every request would answer 404.
+[vars]
+BASE_DOMAIN = "localhost"
 
 # The control database: the vendor registry and Venstock staff. Vendor databases (DB_T<id>) are never listed here;
 # scripts write them into .wrangler-generated/ from the registry. Remote name must stay venstock-dev-control; set

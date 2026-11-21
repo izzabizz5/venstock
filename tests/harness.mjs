@@ -112,10 +112,7 @@ export async function startServer({ users = [USERS.admin], seedSql = "", vendors
     db_id: !v.bind ? null : v.databaseOf ? rows.find((o) => o.slug === v.databaseOf).db_id : v.db_id,
   }));
   const config = join(persistTo, "wrangler.toml");
-  let toml = renderConfig({ root: ROOT, outDir: persistTo, control: LOCAL_CONTROL, vendors: serverRows });
-  // INTERIM (until the Worker resolves vendors from the hostname): the Worker still reads env.DB, so DB is the first
-  // vendor's database. Removed with the resolver.
-  toml += `\n[[d1_databases]]\nbinding = "DB"\ndatabase_name = "${rows[0].db_name}"\ndatabase_id = "${rows[0].db_id}"\n`;
+  const toml = renderConfig({ root: ROOT, outDir: persistTo, control: LOCAL_CONTROL, vendors: serverRows });
   writeFileSync(config, toml);
 
   const port = await freePort();

@@ -12,18 +12,24 @@ where **each vendor has its own D1 database**:
 - each vendor's database (binding `DB_T<id>`) holds that vendor's items, shows, sales, settings, users and sessions;
 - a request's hostname `<slug>.<BASE_DOMAIN>` → registry → `DB_T<id>` → that one database. Nothing else.
 
-**In progress** (branch `multitenant-d1`): migrations, the runner and the scripts exist. The Worker still uses the
-single `DB` binding until the resolver lands (steps 5–7 of the plan). Old names (`show-pos`, `show-pos-db`,
-"show pos") still appear in places.
+**In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist.
+API handlers still take a stand-in `env` holding only the resolved vendor's database (`{ DB }`); later steps change
+them to `{ db, tenant }`. Old names (`show-pos`, `show-pos-db`, "show pos") still appear in places.
+
+**Registry cache:** the Worker caches each hostname's registry lookup in the isolate for 45 seconds
+(`src/lib/control.js`), unknown vendors included. A suspension, unsuspension or new vendor takes effect within
+that window, not instantly.
 
 ## Commands
 `package.json` holds only the two test scripts (no dependencies); everything else runs through `npx wrangler` and `node`.
 
-Local development (the only kind allowed by default). Until the resolver lands, the app still uses the `DB` binding:
+Local development (the only kind allowed by default). Vendors live at `<slug>.localhost:8788`:
 ```bash
-npx wrangler d1 execute DB --local --file=migrations/vendor/0001_baseline.sql   # fresh local DB, first time only
-npx wrangler dev                                                                 # http://localhost:8788
+node scripts/migrate.mjs --control                                  # first time only
+node scripts/create-tenant.mjs demo "Demo Shop" you@example.com     # prints the owner's invite link
+npx wrangler dev -c .wrangler-generated/local/wrangler.toml --persist-to .wrangler/state   # http://demo.localhost:8788
 ```
+`--persist-to` matters: without it wrangler keeps state next to the generated config, not where the scripts put it.
 
 Vendors and staff (local by default; each prints which databases it touches):
 ```bash
@@ -88,15 +94,20 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - Keep changes small: one logical change per commit.
 
 ## Project layout
-- `wrangler.toml`: Worker name, entry point, static assets (`run_worker_first = true`), dev port 8788, the interim
-  `DB` binding and `CONTROL`. Vendor bindings are never committed: scripts write them into `.wrangler-generated/`.
+- `wrangler.toml`: Worker name, entry point, static assets (`run_worker_first = true`), dev port 8788,
+  `BASE_DOMAIN` (`localhost`; the real domain must be set before any deploy) and `CONTROL`. Vendor bindings are never committed: scripts write them into `.wrangler-generated/`.
 - `migrations/control/`, `migrations/vendor/`: numbered migrations with `checksums.json`. `migrations/001–004`: history
   of the original single-shop database, never run again.
-- `src/worker.js`: the Worker entry point. `/api/*` goes to `src/api.js`; everything else is a static file.
+- `src/worker.js`: the Worker entry point. Resolves the vendor from the hostname first: 404 unknown/reserved/deleted,
+  500 miswired (logged), 503 being set up, suspended = shell only (API 403); then `/api/*` goes to `src/api.js`
+  with only that vendor's database, and everything else is a static file.
 - `src/api.js`: the API handler (`handleApi`): items, shows, sales, settings, export, plus auth/users dispatch.
 - `src/lib/auth.js`: invite-only sign-up, PBKDF2 passwords, TOTP 2FA, session cookie (`pos_session`),
   `/api/auth/*` and admin `/api/users/*` routes.
-- `src/lib/tenant.js`: hostname → slug (`<slug>.<BASE_DOMAIN>`, one level, reserved slugs).
+- `src/lib/tenant.js`: hostname → slug → registry row → `DB_T<id>` (derived from the id, must equal
+  `tenants.db_binding`) → `vendor_identity` check (once per isolate). The only code that reads `env[binding]`.
+- `src/lib/control.js`: the only code that reads `CONTROL` (registry lookups, cached 45 s).
+- `src/lib/validate.js`: pure request validation (restock).
 - `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `create-tenant.mjs`, `add-admin.mjs`,
   `create-platform-admin.mjs`, `build-config.mjs`, `release.mjs`; `scripts/lib/` holds the local/remote guard
   (`d1-target.mjs`), the generated-config writer and the checksum manifest code.
