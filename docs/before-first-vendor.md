@@ -104,3 +104,25 @@ caches "no such vendor" too, so a flood of requests for made-up subdomains doesn
   so for a short while some requests may see the old status and some the new one.
 - Onboarding and support scripts should say so ("live within a minute"), and anything urgent, such as cutting off
   an abusive account, has to allow for the window.
+
+## 8. A rate-limiting rule on the wildcard route
+Every request to `*.<vendor domain>` runs the Worker, and a subdomain the registry hasn't seen in the last 45
+seconds costs one query on the control database, which every vendor shares. A flood of made-up subdomains could
+slow lookups for all vendors (nothing can leak through it; it's an availability risk).
+- Before launch, add a Cloudflare rate-limiting rule (WAF → Rate limiting rules) on the vendor domain's wildcard
+  hostname: per client IP, a generous limit for normal use (e.g. a few hundred requests a minute), blocking for a
+  few minutes when exceeded.
+- Test it on the dev zone first: a busy register syncing after a long offline spell must stay well under the limit.
+- Note the rule and its numbers here.
+
+## 9. Nothing else lives on the vendor domain
+Every `<slug>.<vendor domain>` is "same-site" with every other one, so a page on ANY subdomain of that domain
+(or the apex) is trusted by browsers more than a page elsewhere. The Worker refuses cross-origin writes and the
+session cookie is `__Host-` (so no sibling can overwrite it), but don't hand out that position at all:
+- Never point any subdomain of the vendor domain, or the apex, at a third-party host (status pages, docs
+  platforms, marketing site builders, email tracking links, URL shorteners) or anything that serves content other
+  people can edit.
+- Keep marketing, docs, status and support pages on a different registrable domain (e.g. `site.example` for the
+  website and docs, `shops.example` for vendors).
+- The only DNS records under the vendor domain are the wildcard route to the Worker and what Cloudflare itself
+  needs. Check the DNS list before launch and after any change.

@@ -46,3 +46,10 @@ test("bad ids, duplicates and odd characters are refused", () => {
   assert.throws(() => render([{ id: 1, db_name: "a", db_id: "b" }, { id: 1, db_name: "c", db_id: "d" }]), /listed twice/);
   assert.throws(() => render([{ id: 1, db_name: 'x"\n[[d1_databases]]', db_id: "b" }]), /unexpected characters/);
 });
+
+test("the generated config turns off the workers.dev address and preview URLs", () => {
+  const toml = renderConfig({ root: ROOT, outDir: out, control: LOCAL_CONTROL, vendors: [] });
+  assert.match(toml, /^workers_dev = false$/m);
+  assert.match(toml, /^preview_urls = false$/m);
+  assert.doesNotMatch(toml, /^(workers_dev|preview_urls) = true$/m);
+});
