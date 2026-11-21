@@ -105,7 +105,8 @@ test("release refuses when an active vendor or the control database is behind", 
   r = release();
   assert.equal(r.code, 1);
   assert.match(r.out, /the control database is at nothing/);
-  sql("INSERT INTO d1_migrations (name) VALUES ('0001_control.sql')", false);
+  sql(readdirSync(join(ROOT, "migrations", "control")).filter((f) => f.endsWith(".sql")).sort()
+    .map((f) => `INSERT INTO d1_migrations (name) VALUES ('${f}');`).join("\n"), false); // every control migration again
   assert.equal(release().code, 0);
 });
 

@@ -75,6 +75,10 @@ npx wrangler dev -c .wrangler-generated/local/wrangler.toml --persist-to .wrangl
 Open the invite link (`http://demo.localhost:8788/#invite=…`), set a password, and scan the QR code with an
 authenticator app. Locked out? `node scripts/add-admin.mjs --tenant demo you@example.com` prints a fresh invite.
 
+Venstock staff use `http://admin.localhost:8788` (`node scripts/create-platform-admin.mjs you@example.com` prints an
+invite). From there they can open a support session to look at one shop's data: read-only, for 30 minutes, with a
+written reason, and recorded in an audit log.
+
 Every script is local unless you pass `--remote`, and then it only touches databases named `venstock-dev-control`
 or `venstock-dev-t<id>`. Each prints which databases it is about to touch.
 
@@ -106,6 +110,7 @@ and `git tag` commands for you to run.
 - `src/worker.js`: the entry point: sends `/api/*` to the API and serves everything else from `public/`.
 - `src/api.js`: the API: items, shows, sales, settings, CSV export.
 - `src/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
+- `src/platform.js`: the Venstock staff API at `admin.<domain>` (`public/admin.html`, `public/admin.js`).
 - `tests/`: automated tests (`node --test`) and `tests/MANUAL.md` for browser checks.
 - `migrations/`: the database schema as numbered migrations (`control/`, `vendor/`), applied by `scripts/migrate.mjs`.
 - `scripts/`: `create-tenant.mjs` (new vendor, `--resume`, `--abandon`), `add-admin.mjs --tenant` (vendor admins),

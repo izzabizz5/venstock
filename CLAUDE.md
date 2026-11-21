@@ -11,11 +11,14 @@ where **each vendor has its own D1 database**:
 - a **control** database (binding `CONTROL`) holds the vendor registry and Venstock staff;
 - each vendor's database (binding `DB_T<id>`) holds that vendor's items, shows, sales, settings, users and sessions;
 - a request's hostname `<slug>.<BASE_DOMAIN>` → registry → `DB_T<id>` → that one database. Nothing else.
+- `admin.<BASE_DOMAIN>` is the Venstock platform admin (staff in the control database). Staff see a vendor's data
+  only through a **support session**: read-only, 30 minutes, with a reason, on the vendor's own host, audited.
 
 **In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist, and
 `handleApi` receives only `{ request, db, tenant, params }` (locked down, with source tests), every API area (auth,
-items, settings, shows, sales, users) has cross-vendor tests, and failed uploads have their own screen. Next: the
-platform admin login, support sessions, docs. Old names (`show-pos`, `show-pos-db`, "show pos") still appear.
+items, settings, shows, sales, users) has cross-vendor tests, failed uploads have their own screen, and the platform
+admin with support sessions exists. Next: docs and polish (step 13). Old names (`show-pos`, `show-pos-db`, "show
+pos") still appear.
 
 **Registry cache:** the Worker caches each hostname's registry lookup in the isolate for 45 seconds
 (`src/lib/control.js`), unknown vendors included. A suspension, unsuspension or new vendor takes effect within
@@ -38,7 +41,7 @@ node scripts/create-tenant.mjs <slug> "<Vendor name>" owner@example.com   # regi
 node scripts/create-tenant.mjs --resume <slug>     # finish one that stopped part-way (each step is safe to repeat)
 node scripts/create-tenant.mjs --abandon <slug>    # provisioning only: mark deleted, print the database to drop BY HAND
 node scripts/add-admin.mjs --tenant <slug> you@example.com    # add or reset an admin in that vendor's own database
-node scripts/create-platform-admin.mjs you@example.com        # Venstock staff, control database only
+node scripts/create-platform-admin.mjs you@example.com        # Venstock staff: invite for http://admin.localhost:8788
 node scripts/build-config.mjs                      # write .wrangler-generated/local/wrangler.toml from the registry
 node scripts/release.mjs --local                   # release checks; the user runs the remote form, never Claude
 ```
@@ -90,7 +93,13 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   reach `CONTROL` or another vendor's binding.
   Enforced by `tests/lockdown.unit.test.mjs`: only `src/worker.js`, `src/lib/tenant.js` and `src/lib/control.js`
   mention `env`; only `tenant.js` reads `env[...]` (the derived binding); only `control.js` touches `CONTROL`;
-  `handleApi` gets exactly `{ request, db, tenant, params }`. A new file in `src/` must be added to that test.
+  `handleApi` gets exactly `{ request, db, tenant, params }` (in a support session also `support`, with a read-only
+  `db`); platform handlers (`src/platform.js`, admin host only) get exactly `{ request, db, params }` where `db` is the
+  control database, and never `env` or a vendor binding. A new file in `src/` must be added to that test.
+- Support sessions: started only at the admin host (reason required, active vendors only); the one-time link works
+  once, only at that vendor's host; the `__Host-pos_support` cookie is valid only there, until it ends or 30 minutes
+  pass. Anything but GET is refused (403) before a handler runs, and handlers get `readOnlyDb()`, which allows only
+  single SELECT statements. Every step and every request goes to `audit_log` in control; request bodies never do.
 - Every request except GET/HEAD must be `Content-Type: application/json` (415 otherwise) and, when the browser sends
   `Sec-Fetch-Site`, `same-origin` (403 otherwise): sibling subdomains are same-site, so SameSite cookies alone don't
   stop forged writes (`src/worker.js` `refuseForgedRequest`). GET requests never change anything.
@@ -128,7 +137,11 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   `/api/auth/*` and admin `/api/users/*` routes.
 - `src/lib/tenant.js`: hostname → slug → registry row → `DB_T<id>` (derived from the id, must equal
   `tenants.db_binding`) → `vendor_identity` check (once per isolate). The only code that reads `env[binding]`.
-- `src/lib/control.js`: the only code that reads `CONTROL` (registry lookups, cached 45 s).
+- `src/lib/control.js`: the only code that reads `CONTROL` (registry lookups, cached 45 s; the vendor-host side of
+  support sessions; the audit log).
+- `src/platform.js`: the platform admin API at `admin.<BASE_DOMAIN>` (staff login, vendors, support sessions, audit
+  log). `public/admin.html` and `public/admin.js` are its page (no offline mode).
+- `src/lib/readonly-db.js`: the read-only database wrapper used in support sessions.
 - `src/lib/validate.js`: pure request validation (restock, sale uploads).
 - `src/lib/sales.js`: records an uploaded sale: idempotent per `client_id`, priced from the vendor's own items
   (current price; the device's discount is capped at the subtotal), unknown items or show = 422, one atomic batch.

@@ -7,9 +7,15 @@
 //     every /api request gets 403;
 //   - active vendor: /api goes to the API with ONLY that vendor's database; everything else is a static file;
 //   - admin.<BASE_DOMAIN>: the platform admin page and API (src/platform.js), with ONLY the control database.
+// Support sessions (a platform admin looking at one vendor, read-only, 30 minutes) live on the vendor's own host:
+// /api/support/enter swaps the one-time code for a __Host-pos_support cookie; with that cookie, only GET reaches the
+// API, through a read-only database, and every request is written to the audit log.
 import { handleApi } from "./api.js";
 import { handlePlatformApi } from "./platform.js";
 import { resolveVendor } from "./lib/tenant.js";
+import { enterSupport, supportSession, endSupport, audit } from "./lib/control.js";
+import { readCookie, sessionCookie, SUPPORT_COOKIE } from "./lib/auth.js";
+import { readOnlyDb } from "./lib/readonly-db.js";
 
 
 const isApi = (path) => path === "/api" || path.startsWith("/api/");
@@ -103,6 +109,21 @@ async function serve(request, env) {
   const route = apiRoute(url);
   if (!route) return Response.json({ error: "Not found" }, { status: 404 });
 
+  // ---------- support sessions (this vendor's host only) ----------
+  if (route[0] === "support") return supportRoutes(request, env, v.tenant, route);
+  const supportToken = readCookie(request, SUPPORT_COOKIE);
+  if (supportToken) {
+    const s = await supportSession(env, supportToken, v.tenant.id);
+    if (!s) return Response.json({ error: "This support session has ended." }, { status: 401, headers: { ...NO_STORE, "set-cookie": sessionCookie(SUPPORT_COOKIE, "", 0) } });
+    const where = `${request.method} ${url.pathname}`;
+    if (request.method !== "GET") {
+      await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.denied", detail: where });
+      return Response.json({ error: "Support sessions are read-only." }, { status: 403, headers: NO_STORE });
+    }
+    await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.request", detail: where });
+    return handleApi({ request, db: readOnlyDb(v.db), tenant: v.tenant, params: { route }, support: { admin_email: s.admin_email, expires_at: s.expires_at } });
+  }
+
   // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.
   return handleApi({ request, db: v.db, tenant: v.tenant, params: { route } });
 }
@@ -116,4 +137,22 @@ function apiRoute(url) {
   }
 }
 
+// POST /api/support/enter { code }: the one-time code from the admin's link, for THIS vendor only.
+// POST /api/support/end: the banner's End button.
+async function supportRoutes(request, env, tenant, route) {
+  const [, action] = route;
+  if (action === "enter" && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const entered = await enterSupport(env, body.code, tenant.id);
+    if (!entered) return Response.json({ error: "That support link is invalid, already used or expired." }, { status: 400, headers: NO_STORE });
+    const seconds = Math.max(1, Math.floor((entered.session.expires_at - Date.now()) / 1000));
+    return Response.json({ ok: true, expires_at: entered.session.expires_at },
+      { headers: { ...NO_STORE, "set-cookie": sessionCookie(SUPPORT_COOKIE, entered.token, seconds) } });
+  }
+  if (action === "end" && request.method === "POST") {
+    await endSupport(env, readCookie(request, SUPPORT_COOKIE), tenant.id);
+    return Response.json({ ok: true }, { headers: { ...NO_STORE, "set-cookie": sessionCookie(SUPPORT_COOKIE, "", 0) } });
+  }
+  return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
+}
 

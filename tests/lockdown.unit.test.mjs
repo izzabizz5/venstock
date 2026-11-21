@@ -1,6 +1,7 @@
 // The lockdown, checked in the source: request handlers can only ever reach the one vendor database the hostname
 // resolved to. They never see env, so they can't reach CONTROL or another vendor's binding.
-//   - src/worker.js   reads env.ASSETS and hands env to the resolver; calls handleApi with { request, db, tenant, params }
+//   - src/worker.js   reads env.ASSETS and hands env to the resolver and the support-session functions; calls handleApi
+//                     with { request, db, tenant, params } (plus a read-only db and `support` in a support session),
 //                     and handlePlatformApi with { request, db, params } (db = the control database, admin host only)
 //   - src/lib/tenant.js   the only dynamic env[...] read (the vendor binding), plus env.BASE_DOMAIN
 //   - src/lib/control.js  the only code that touches CONTROL
@@ -34,7 +35,7 @@ const using = (re) => files.filter((f) => re.test(SOURCES[f]));
 const props = (f, re) => [...new Set([...SOURCES[f].matchAll(re)].map((m) => m[1]))].sort();
 
 test("the source files are the ones these rules were written for", () => {
-  assert.deepEqual(files, ["api.js", "lib/auth.js", "lib/control.js", "lib/sales.js", "lib/tenant.js", "lib/validate.js",
+  assert.deepEqual(files, ["api.js", "lib/auth.js", "lib/control.js", "lib/readonly-db.js", "lib/sales.js", "lib/tenant.js", "lib/validate.js",
     "platform.js", "worker.js"],
     "a new src file: decide which of the rules below applies to it, then update this list");
 });
@@ -52,8 +53,10 @@ test("only the resolver reads a binding dynamically (env[...]), and only the der
 test("only control.js touches CONTROL; vendor handler modules import none of control, tenant or platform", () => {
   assert.deepEqual(using(/\bCONTROL\b/), ["lib/control.js"]);
   assert.deepEqual(props("lib/control.js", /\benv\.(\w+)/g), ["CONTROL"]);
-  assert.deepEqual(using(/from\s+["'][./]*(lib\/)?control\.js["']/), ["lib/tenant.js"]);
-  for (const f of ["api.js", "lib/auth.js", "lib/sales.js", "lib/validate.js"]) {
+  assert.deepEqual(using(/from\s+["'][./]*(lib\/)?control\.js["']/), ["lib/tenant.js", "platform.js", "worker.js"]);
+  assert.deepEqual([...SOURCES["platform.js"].matchAll(/import \{([^}]*)\} from "\.\/lib\/control\.js"/g)].map((m) => m[1].trim()), ["SUPPORT_MINUTES"],
+    "platform.js takes only a constant from control.js (it has no env to call anything with)");
+  for (const f of ["api.js", "lib/auth.js", "lib/sales.js", "lib/validate.js", "lib/readonly-db.js"]) {
     assert.doesNotMatch(SOURCES[f], /from\s+["'][./]*(lib\/)?(control|tenant)\.js["']|platform\.js/, f);
   }
 });
@@ -63,10 +66,13 @@ test("the Worker reads only env.ASSETS itself; the resolver only env.BASE_DOMAIN
   assert.deepEqual(props("lib/tenant.js", /\benv\.(\w+)/g), ["BASE_DOMAIN"]);
 });
 
-test("vendor handlers get exactly { request, db, tenant, params }", () => {
+test("vendor handlers get exactly { request, db, tenant, params } (support: a read-only db plus who is looking)", () => {
   const calls = [...SOURCES["worker.js"].matchAll(/handleApi\(([^;]*)\);/g)].map((m) => m[1].replace(/\s+/g, " "));
-  assert.deepEqual(calls, ["{ request, db: v.db, tenant: v.tenant, params: { route } }"]);
-  assert.match(SOURCES["api.js"], /export async function handleApi\(\{ request, db, tenant, params \}\)/);
+  assert.deepEqual(calls, [
+    "{ request, db: readOnlyDb(v.db), tenant: v.tenant, params: { route }, support: { admin_email: s.admin_email, expires_at: s.expires_at } }",
+    "{ request, db: v.db, tenant: v.tenant, params: { route } }",
+  ]);
+  assert.match(SOURCES["api.js"], /export async function handleApi\(\{ request, db, tenant, params, support = null \}\)/);
   assert.deepEqual(using(/handleApi\(/), ["api.js", "worker.js"]);
 });
 
@@ -80,6 +86,13 @@ test("platform handlers get exactly { request, db, params }, db being the contro
   assert.doesNotMatch(SOURCES["platform.js"], /\benv\b/);
 });
 
+test("support sessions: anything but GET is refused before a handler runs, and the handler's db is read-only", () => {
+  const w = SOURCES["worker.js"];
+  const i = w.indexOf("const s = await supportSession(env, supportToken, v.tenant.id);");
+  const j = w.indexOf("db: readOnlyDb(v.db)");
+  assert.ok(i > 0 && j > i);
+  assert.match(w.slice(i, j), /if \(request\.method !== "GET"\) \{[\s\S]*?status: 403/);
+});
 
 test("no code refers to the old shared DB binding", () => {
   assert.deepEqual(using(/\bDB\b(?!_)/), []);

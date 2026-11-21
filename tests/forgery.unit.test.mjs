@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { refuseForgedRequest } from "../src/worker.js";
-import { VENDOR_COOKIE, PLATFORM_COOKIE, sessionCookie, readCookie } from "../src/lib/auth.js";
+import { VENDOR_COOKIE, PLATFORM_COOKIE, SUPPORT_COOKIE, sessionCookie, readCookie } from "../src/lib/auth.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -42,11 +42,11 @@ test("a non-GET request from anywhere but the same origin is refused with 403, e
 
 test("the session cookies are __Host- names: Secure, HttpOnly, SameSite=Strict, Path=/, no Domain", () => {
   assert.equal(VENDOR_COOKIE, "__Host-pos_session");
-  for (const name of [PLATFORM_COOKIE]) {
+  for (const name of [PLATFORM_COOKIE, SUPPORT_COOKIE]) {
     assert.match(name, /^__Host-pos_/);
     assert.doesNotMatch(sessionCookie(name, "t", 1), /domain/i);
   }
-  assert.equal(new Set([VENDOR_COOKIE, PLATFORM_COOKIE]).size, 2);
+  assert.equal(new Set([VENDOR_COOKIE, PLATFORM_COOKIE, SUPPORT_COOKIE]).size, 3);
   const c = sessionCookie(VENDOR_COOKIE, "tok", 60);
   assert.equal(c, "__Host-pos_session=tok; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=60");
   assert.doesNotMatch(c, /domain/i);
@@ -75,6 +75,7 @@ test("source: the check runs first in the Worker, and auth.js never sets a Domai
   assert.match(auth, /const readToken = \(request\) => readCookie\(request, R\.cookie\);/);
   assert.match(auth, /export const VENDOR_REALM = Object\.freeze\(\{ users: "users", sessions: "sessions", fk: "user_id", cookie: VENDOR_COOKIE,/);
   assert.match(auth, /export const PLATFORM_COOKIE = "__Host-pos_platform";/);
+  assert.match(auth, /export const SUPPORT_COOKIE = "__Host-pos_support";/);
 });
 
 test("front end: the app's only API call sends application/json for every method; sync.js and sw.js only GET the shell", () => {

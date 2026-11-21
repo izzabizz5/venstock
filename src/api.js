@@ -33,7 +33,9 @@ const DEFAULT_SETTINGS = {
 // Called by src/worker.js for every /api request; route = the path segments after /api.
 // db: the one vendor database the hostname resolved to; tenant: that vendor's registry row ({ id, slug, name,
 // status }). Handlers never receive env, so they can't reach CONTROL or another vendor's binding.
-export async function handleApi({ request, db, tenant, params }) {
+// support: set only during a Venstock support session ({ admin_email, expires_at }); db is then read-only and the
+// Worker has already refused anything but GET. The vendor's own login cookie is not used at all.
+export async function handleApi({ request, db, tenant, params, support = null }) {
   const url = new URL(request.url);
   const [a, b, c] = params.route || [];
   const m = request.method;
@@ -41,8 +43,17 @@ export async function handleApi({ request, db, tenant, params }) {
 
   try {
     // ---------- LOGIN ----------
+    if (support && a === "auth") {
+      if (b === "me" && m === "GET") {
+        return json({ email: `Venstock support (${support.admin_email})`, is_admin: true, stage: "ok",
+          support: { admin_email: support.admin_email, expires_at: support.expires_at } });
+      }
+      return fail("Not available in a support session", 403);
+    }
     if (a === "auth") return await authRoutes({ db, request, b, c, m, body });
-    const sess = await currentSession(db, request);
+    // A support session acts as a read-only admin; it is never a row in this vendor's users or sessions.
+    const sess = support ? { id: 0, email: `Venstock support (${support.admin_email})`, is_admin: 1, mfa_ok: 1 }
+      : await currentSession(db, request);
     if (!sess || !sess.mfa_ok) return fail("Please log in", 401);
     if (a === "users") {
       if (!sess.is_admin) return fail("Only admins can manage who logs in.", 403);

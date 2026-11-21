@@ -91,9 +91,10 @@ test("the forgery rules hold on the admin host too", async () => {
   assert.equal((await at("admin.localhost", "/api/auth/login", { method: "POST", body, headers: { "content-type": "text/plain" } })).status, 415);
   assert.equal((await at("admin.localhost", "/api/auth/login", { method: "POST", body, headers: { "sec-fetch-site": "same-site" } })).status, 403);
   const cookie = `__Host-pos_platform=${admin.cookies["__Host-pos_platform"]}`;
-  const forged = await at("admin.localhost", "/api/auth/logout", { method: "POST", body: {}, headers: { cookie, "sec-fetch-site": "same-site" } });
+  const forged = await at("admin.localhost", "/api/platform/support", { method: "POST", body: { slug: "demo", reason: "forged request" },
+    headers: { cookie, "sec-fetch-site": "same-site" } });
   assert.equal(forged.status, 403);
-  assert.equal((await admin.get("/api/platform/vendors")).status, 200, "the forged logout did nothing");
+  assert.equal(server.query("CONTROL", "SELECT count(*) AS n FROM support_sessions")[0].n, 0);
 });
 
 test("a platform admin invite (create-platform-admin) signs up at admin.localhost", async () => {

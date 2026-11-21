@@ -102,6 +102,8 @@ async function newInvite() {
 // (https, or localhost). So it is always host-only, and a sibling subdomain can't set or overwrite it ("cookie
 // tossing"): a cookie it sets for the whole domain can't use this name. The platform admin uses its own name.
 export const VENDOR_COOKIE = "__Host-pos_session";
+// A Venstock support session on a vendor's host (set by src/worker.js from the admin's one-time link).
+export const SUPPORT_COOKIE = "__Host-pos_support";
 export const sessionCookie = (name, token, maxAgeSeconds) =>
   `${name}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
 // The value of exactly this cookie name (no prefix or suffix matches), or undefined.

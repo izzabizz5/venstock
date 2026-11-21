@@ -80,7 +80,7 @@ function toast(msg) {
 // ---------- data sync ----------
 let syncing = false;
 async function sync() {
-  if (syncing || !loggedIn()) return;
+  if (syncing || !loggedIn() || inSupport()) return; // a support session never uploads (or keeps) sales
   syncing = true;
   try {
     // Rules in sync.js: 2xx uploaded; 400/422 refused for good (moved to "failed" for a person to look at); anything
@@ -129,7 +129,24 @@ async function refresh() {
   for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, state[k]);
 }
 
+// A Venstock support session (read-only, opened from the platform admin's one-time link): /api/auth/me says so.
+const inSupport = () => !!(state.me && state.me.support);
+function paintSupportBanner() {
+  let b = document.getElementById("supportBanner");
+  if (!inSupport()) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "supportBanner";
+    b.className = "support-banner";
+    b.setAttribute("role", "status");
+    document.body.prepend(b);
+  }
+  const until = new Date(state.me.support.expires_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  b.innerHTML = `Venstock support session: read-only, ends at ${esc(until)}. <button class="sm" data-endsupport>End now</button>`;
+}
+
 function paintHeader() {
+  paintSupportBanner();
   $("#showName").textContent = state.show ? state.show.name : "No show running";
   const n = state.pending.length, f = state.failed.length;
   const s = $("#sync");
@@ -476,6 +493,7 @@ function paintCheckout() {
 }
 
 function completeSale() {
+  if (inSupport()) { toast("This is a read-only support session: nothing can be sold or changed."); return; }
   const t = computeTotals();
   if (!t.lines.length) return;
   if (state.payment === "cash" && state.cashGiven !== "" && toCents(state.cashGiven) < t.total
@@ -987,8 +1005,19 @@ async function logOut() {
 }
 
 async function boot() {
-  // invite link: /#invite=CODE&email=...
+  // invite link: /#invite=CODE&email=...   support link (from the platform admin): /#support=CODE
   const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("support")) {
+    history.replaceState(null, "", location.pathname + location.search);
+    try {
+      await api("support/enter", { method: "POST", body: { code: h.get("support") } });
+      signedIn(await api("auth/me"));
+    } catch (e) {
+      alert(e.status ? e.message : "You're offline: support sessions need a connection.");
+      render();
+    }
+    return;
+  }
   if (h.get("invite")) {
     history.replaceState(null, "", location.pathname + location.search);
     state.me = null; store.set("me", null);
@@ -1250,6 +1279,17 @@ document.addEventListener("click", (e) => {
       await api("items/restock", { method: "POST", body: { items } }).catch(itemGone);
       state.restock = {}; state.restockSearch = ""; closeModal(false);
     }, `Restocked ${items.length} item${items.length === 1 ? "" : "s"}`);
+    return;
+  }
+
+  if (d.endsupport !== undefined) {
+    api("support/end", { method: "POST", body: {} }).catch(() => {}).finally(() => {
+      state.me = null; store.set("me", null);
+      for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, null);
+      Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null });
+      state.auth = authState("login", "The support session has ended.");
+      render(); paintSupportBanner();
+    });
     return;
   }
 

@@ -378,3 +378,7 @@ details summary { cursor: pointer; font-size: 13px; color: var(--blue); }
 .card.failed { border-left: 4px solid var(--red); }
 .card.failed .reason { color: var(--red); font-size: 13px; margin-top: 4px; }
 #sync[data-tab] { cursor: pointer; text-decoration: underline; }
+
+/* A Venstock support session (read-only) on a vendor's site. */
+.support-banner { position: sticky; top: 0; z-index: 50; background: var(--warn); color: #fff; padding: 8px 12px; font-size: 14px; text-align: center; }
+.support-banner .sm { margin-left: 8px; }

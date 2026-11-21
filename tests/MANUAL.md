@@ -81,6 +81,23 @@ they are (tests/sync.unit.test.mjs covers the rules; this checks them in a real 
    shop any more and the change wasn't saved (not a bare "Not found"); after closing it, the item is gone from the
    list. Restocking the same stale item shows the same message.
 
+## The platform admin page and a support session (Chrome and Firefox)
+1. `node scripts/create-platform-admin.mjs you+staff@example.com` and open the printed link
+   (`http://admin.localhost:8788/#invite=…`). Set a password, scan the QR code, enter the 6-digit code. Expected:
+   the Vendors list with `demo` (and `acme` if created). Cookies for `admin.localhost`: `__Host-pos_platform`, no
+   Domain.
+2. Press "Support session" next to `demo`, type a reason. Expected: a "Support link for demo" card. Press "Open
+   support session". Expected: a new tab at `http://demo.localhost:8788/` with an orange banner "Venstock support
+   session: read-only, ends at …", showing demo's items and sales.
+3. In that tab, try to ring up a sale and to edit an item. Expected: "read-only support session" messages; nothing
+   changes (check in a normal demo login).
+4. Reload the admin page. Expected: the session listed as active; the audit log shows support.start, support.enter
+   and support.request lines.
+5. Press "End now" in the banner. Expected: the login screen. The admin page shows the session as "ended
+   (vendor-host)".
+6. Open the same support link again. Expected: an alert that the link is invalid, already used or expired.
+7. In a normal tab, log in at `http://demo.localhost:8788/` as demo's owner. Expected: no banner, everything normal.
+
 ## Results
 | Check | Browser and version | Date | Result |
 |---|---|---|---|
