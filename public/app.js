@@ -19,6 +19,7 @@ const state = {
   upcoming: store.get("upcoming", []), // shows entered ahead of time, not started yet
   editUpcoming: null,                  // id of the upcoming show being edited
   pending: store.get("pending", []),  // sales saved on this device, not yet uploaded
+  failed: store.get("failed", []),    // sales the server refused (400/422): { sale, status, error, at }, kept until removed
   register: store.get("register", "Register 1"), // each device/person picks its own register
   // the transaction in progress on this device (kept if the page reloads)
   cart: store.get("cart", {}),        // item_id -> qty
@@ -82,16 +83,21 @@ async function sync() {
   if (syncing || !loggedIn()) return;
   syncing = true;
   try {
-    for (const sale of [...state.pending]) {
-      try {
-        await api("sales", { method: "POST", body: sale });
-        state.pending = state.pending.filter((s) => s !== sale);
-        store.set("pending", state.pending);
-      } catch (e) {
-        if (!e.status || e.status === 401) throw e; // offline / logged out: try again later
-        // the server refused this one: keep it on the device and keep going, so later sales still upload
-      }
+    // Rules in sync.js: 2xx uploaded; 400/422 refused for good (moved to "failed" for a person to look at); anything
+    // else (offline, logged out, 403, 404, 409, 429, 5xx) stays queued and ends this pass.
+    const post = (sale) => api("sales", { method: "POST", body: sale })
+      .then(() => ({ status: 200 }), (e) => ({ status: e.status || 0, error: e.message }));
+    const batch = [...state.pending];
+    const r = await VenstockSync.uploadPending(batch, post);
+    const finished = new Set(batch.filter((s) => !r.pending.includes(s)));
+    state.pending = state.pending.filter((s) => !finished.has(s)); // sales rung up during the pass stay queued
+    store.set("pending", state.pending);
+    if (r.failed.length) {
+      state.failed = [...state.failed, ...r.failed];
+      store.set("failed", state.failed);
+      toast(`${r.failed.length} sale${r.failed.length === 1 ? "" : "s"} couldn't be uploaded. See the Sales tab.`);
     }
+    if (r.stopped === 0 || r.stopped === 401) throw new Error("offline or logged out: try again later");
     await refresh();
     state.online = true;
   } catch (e) {
@@ -125,10 +131,11 @@ async function refresh() {
 
 function paintHeader() {
   $("#showName").textContent = state.show ? state.show.name : "No show running";
-  const n = state.pending.length;
+  const n = state.pending.length, f = state.failed.length;
   const s = $("#sync");
-  s.textContent = n ? `${n} to upload` : state.online ? "✓ synced" : "offline";
-  s.className = n || !state.online ? "warn" : "";
+  s.textContent = [f ? `${f} failed` : "", n ? `${n} to upload` : "", !f && !n ? (state.online ? "✓ synced" : "offline") : ""].filter(Boolean).join(" · ");
+  s.className = n || f || !state.online ? "warn" : "";
+  if (f) s.dataset.tab = "sales"; else delete s.dataset.tab; // tap to see the failed sales
 }
 
 // ---------- discounts & bundle deals ----------
@@ -539,6 +546,24 @@ function closeModal(repaint = true) {
 }
 
 // ---------- SALES ----------
+// Sales the server refused. They never upload by themselves: someone retries (after fixing the cause, e.g. re-adding a
+// deleted item), keeps a record (CSV) and removes them.
+function failedHTML() {
+  if (!state.failed.length) return "";
+  const n = state.failed.length;
+  const time = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `
+    <div class="card failed"><strong>${n} sale${n === 1 ? "" : "s"} couldn't be uploaded</strong>
+      <p class="muted">The server refused ${n === 1 ? "this sale" : "these sales"}, so ${n === 1 ? "it isn't" : "they aren't"} in your totals.
+        ${n === 1 ? "It stays" : "They stay"} on this device until you remove ${n === 1 ? "it" : "them"}. Download a copy before removing anything.</p>
+      <button class="sm" data-failedcsv>Download as CSV</button></div>
+    ${state.failed.map((f, i) => `
+      <div class="card failed"><div class="row"><span class="grow">${f.sale.items.map((l) => `${l.qty}× ${esc(l.name)}`).join(", ")}</span>
+        <button class="sm" data-failretry="${i}">Try again</button> <button class="sm danger" data-failremove="${i}">Remove</button></div>
+        <div class="muted">${esc(time(f.sale.created_at))} · ${esc(payLabel(f.sale.payment_method))}${f.sale.register ? ` · ${esc(f.sale.register)}` : ""}</div>
+        <div class="reason">${esc(f.error)}</div></div>`).join("")}`;
+}
+
 function viewSales() {
   const regs = ["All", ...new Set([...state.sales.map((s) => s.register).filter(Boolean), ...state.pending.map((s) => s.register).filter(Boolean)])];
   const reg = regs.includes(state.salesRegister) ? state.salesRegister : "All";
@@ -554,6 +579,7 @@ function viewSales() {
     ${regs.length > 2 ? `<div class="chips">${regs.map((r) => `<button class="chip ${r === reg ? "on" : ""}" data-salesreg="${esc(r)}">${esc(r)}</button>`).join("")}</div>` : ""}
     ${state.show ? "" : `<div class="notice">No show is running, so these are sales that aren't part of any show.
       Start a show in the Shows tab to group sales.</div>`}
+    ${failedHTML()}
     <div class="card"><strong>${reg !== "All" ? esc(reg) : state.show ? "Total this show" : "Total (not in a show)"}: ${money(total)}</strong></div>
     ${pend.map((s) => {
       const sub = s.items.reduce((t, i) => t + i.qty * i.price_cents, 0);
@@ -1224,6 +1250,24 @@ document.addEventListener("click", (e) => {
       await api("items/restock", { method: "POST", body: { items } }).catch(itemGone);
       state.restock = {}; state.restockSearch = ""; closeModal(false);
     }, `Restocked ${items.length} item${items.length === 1 ? "" : "s"}`);
+    return;
+  }
+
+  // failed sales
+  if (d.failedcsv !== undefined) { downloadText("failed-sales.csv", VenstockSync.failedCsv(state.failed)); return; }
+  if (d.failretry !== undefined) {
+    const [f] = state.failed.splice(Number(d.failretry), 1);
+    if (f) { state.pending.unshift(f.sale); store.set("pending", state.pending); store.set("failed", state.failed); }
+    paintHeader(); render(); sync();
+    return;
+  }
+  if (d.failremove !== undefined) {
+    const f = state.failed[Number(d.failremove)];
+    if (f && confirm("Remove this sale from this device? It was never recorded, so it will be gone for good. Download the CSV first if you need a record.")) {
+      state.failed.splice(Number(d.failremove), 1);
+      store.set("failed", state.failed);
+      paintHeader(); render();
+    }
     return;
   }
 

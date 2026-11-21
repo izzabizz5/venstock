@@ -126,6 +126,8 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - `tests/`: `node --test` harness and tests; `tests/MANUAL.md` for browser-only checks.
 - `docs/before-first-vendor.md`: what must exist before any paying vendor is onboarded (including drills you run).
 - `.claude/`: Claude Code guardrails (deny rules and a hook that block remote and deploy commands).
-- `public/`: the PWA front end: `index.html`, `app.js` (all screens + offline sale queue), `style.css`,
-  `sw.js` (app-shell cache), `manifest.webmanifest`, `vendor/qrcode.js`.
+- `public/`: the PWA front end: `index.html`, `app.js` (all screens + offline sale queue), `sync.js` (upload and
+  offline rules shared with the service worker: only 400/422 mark a sale failed; the shell caches only 2xx and
+  falls back to the cache on 500/502/503/504), `style.css`, `sw.js` (app-shell cache), `manifest.webmanifest`,
+  `vendor/qrcode.js`. Bump `CACHE` in `sw.js` whenever a shell file changes.
 - `README.md`: what Venstock is, the vendor guide, and local development.

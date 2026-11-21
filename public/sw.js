@@ -1,6 +1,8 @@
-// Caches the app shell so it opens with no signal. Data is handled in app.js.
-const CACHE = "venstock-v11";
-const SHELL = ["/", "/app.js", "/style.css", "/manifest.webmanifest", "/vendor/qrcode.js"];
+// Caches the app shell so it opens with no signal. Data is handled in app.js. The rules live in sync.js
+// (VenstockSync.shellFetch), shared with the app and tested in tests/sync.unit.test.mjs.
+importScripts("/sync.js");
+const CACHE = "venstock-v12";
+const SHELL = ["/", "/app.js", "/sync.js", "/style.css", "/manifest.webmanifest", "/vendor/qrcode.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -15,14 +17,7 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
-  // network first so updates show up; fall back to cache when offline
-  e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, copy));
-        return res;
-      })
-      .catch(() => caches.match(e.request).then((r) => r || caches.match("/")))
-  );
+  // Network first; only successful answers are cached; 500/502/503/504 fall back to the cached copy; 404 and 403 are
+  // shown as they are; offline uses the cache.
+  e.respondWith(caches.open(CACHE).then((cache) => self.VenstockSync.shellFetch(e.request, { fetch: (r) => fetch(r), cache })));
 });

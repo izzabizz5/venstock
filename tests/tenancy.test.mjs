@@ -24,7 +24,7 @@ after(async () => { await server?.stop(); });
 
 const get = (host, path, extra = {}) => rawRequest(server.port, { host, path, ...extra });
 const loginAt = (host, user = USERS.admin) => get(host, "/api/auth/login", { method: "POST", body: { email: user.email, password: user.password } });
-const SHELL = ["/", "/app.js", "/sw.js"];
+const SHELL = ["/", "/app.js", "/sw.js", "/sync.js"];
 const API = ["/api", "/api/auth/me", "/api/items"];
 
 for (const [label, host] of [
