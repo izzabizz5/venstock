@@ -4,7 +4,7 @@ Point-of-sale and inventory for vendors who sell at markets, cons and pop-up sho
 Take Cash, Venmo and Zelle, track stock across several registers, and see what sold at each show.
 It works offline: sales are saved on the phone and upload automatically when signal returns.
 
-Venstock runs on Cloudflare Pages + Pages Functions + D1, with no build step.
+Venstock runs as one Cloudflare Worker that also serves the app's static files, with D1 for data. No build step.
 
 > **Status:** Venstock is being turned into a multi-tenant product, where many vendors share one deployment
 > and each vendor's data is kept separate. That work is in progress. Today the app still serves **one vendor
@@ -69,7 +69,7 @@ See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant
 ```bash
 npx wrangler d1 execute DB --local --file=schema.sql      # first time only: create the local tables
 node scripts/add-admin.mjs you@example.com                # first time only: prints your invite link
-npx wrangler pages dev public                             # then open http://localhost:8788
+npx wrangler dev                                          # then open http://localhost:8788
 ```
 Open the invite link, set a password, and scan the QR code with an authenticator app.
 Locked out locally? Run the `add-admin.mjs` command again for a fresh invite.
@@ -99,7 +99,9 @@ database Venstock may use is `venstock-dev`.
 ### Project layout
 - `public/`: the app (installable web app): `index.html`, `app.js` (every screen plus the offline sale queue),
   `style.css`, `sw.js` (offline cache), `manifest.webmanifest`, `vendor/qrcode.js`.
-- `functions/api/[[route]].js`: the API: items, shows, sales, settings, CSV export.
-- `functions/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
+- `src/worker.js`: the entry point: sends `/api/*` to the API and serves everything else from `public/`.
+- `src/api.js`: the API: items, shows, sales, settings, CSV export.
+- `src/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
+- `tests/`: automated tests (`node --test`) and `tests/MANUAL.md` for browser checks.
 - `schema.sql` and `migrations/`: the database schema.
 - `scripts/add-admin.mjs`: creates or resets an admin and prints an invite code (local by default).

@@ -1,5 +1,5 @@
 // Accounts: invite-only sign-up, password login, and authenticator-app codes (MFA).
-// Used by functions/api/[[route]].js. This file exports no onRequest, so it is not a route itself.
+// Used by src/api.js. Not an entry point.
 
 const enc = new TextEncoder();
 const json = (data, status = 200, headers = {}) =>

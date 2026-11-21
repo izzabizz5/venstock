@@ -1,6 +1,6 @@
 // All API routes live here: /api/items, /api/shows, /api/sales, /api/settings, /api/export,
 // plus /api/auth (log in / sign up) and /api/users (admins). Everything except /api/auth needs a full login.
-import { authRoutes, userRoutes, currentSession } from "../lib/auth.js";
+import { authRoutes, userRoutes, currentSession } from "./lib/auth.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -28,7 +28,8 @@ const DEFAULT_SETTINGS = {
   deals: [],
 };
 
-export async function onRequest({ request, env, params }) {
+// Called by src/worker.js for every /api request; route = the path segments after /api.
+export async function handleApi({ request, env, params }) {
   const db = env.DB;
   const url = new URL(request.url);
   const [a, b, c] = params.route || [];

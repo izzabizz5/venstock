@@ -833,7 +833,7 @@ function viewShows() {
 
 // ---------- LOGIN ----------
 // Invite-only sign-up, then password + authenticator-app code. The server does the checking
-// (functions/lib/auth.js); these screens walk through the steps.
+// (src/lib/auth.js); these screens walk through the steps.
 const loggedIn = () => state.me?.stage === "ok";
 const authState = (view = "login", info = "", extra = {}) =>
   ({ view, info, error: "", email: store.get("lastEmail", ""), invite: "", setup: null, setupFailed: false, ...extra });

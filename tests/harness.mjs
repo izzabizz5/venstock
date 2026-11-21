@@ -7,7 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer, request as httpRequest } from "node:http";
 import { pbkdf2Sync, randomBytes } from "node:crypto";
-import { totpCode } from "../functions/lib/auth.js";
+import { totpCode } from "../src/lib/auth.js";
 import { serverCommand, d1ExecuteCommand } from "./config.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -26,7 +26,7 @@ function assertLocal(args) {
 }
 
 const sqlString = (s) => `'${String(s).replace(/'/g, "''")}'`;
-// Same format as hashPassword() in functions/lib/auth.js.
+// Same format as hashPassword() in src/lib/auth.js.
 function hashPassword(password) {
   const salt = randomBytes(16);
   const hash = pbkdf2Sync(password, salt, 100000, 32, "sha256");

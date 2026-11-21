@@ -67,7 +67,7 @@ if (remote) {
   console.log("About to touch LOCAL D1 database (binding DB, stored in .wrangler/)");
 }
 
-// Must match newInvite() / normalizeInvite() in functions/lib/auth.js
+// Must match newInvite() / normalizeInvite() in src/lib/auth.js
 const CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const code = Array.from({ length: 12 }, () => CHARS[randomInt(CHARS.length)]).join("");
 const hash = createHash("sha256").update(code).digest("base64url");
