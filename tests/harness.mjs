@@ -54,7 +54,8 @@ export function rawRequest(port, { method = "GET", path = "/", host = "localhost
     const data = body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body);
     const req = httpRequest({
       host: "127.0.0.1", port, method, path,
-      headers: { host: `${host}:${port}`, ...(data !== undefined ? { "content-type": "application/json" } : {}), ...headers },
+      // Like the app (public/app.js api()): every request that isn't GET/HEAD carries the JSON content type.
+      headers: { host: `${host}:${port}`, ...(data !== undefined || !["GET", "HEAD"].includes(method) ? { "content-type": "application/json" } : {}), ...headers },
     }, (res) => {
       const chunks = [];
       res.on("data", (c) => chunks.push(c));

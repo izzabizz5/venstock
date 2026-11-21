@@ -39,7 +39,29 @@ export default {
   },
 };
 
+// Forged requests from another origin, including sibling subdomains (same-site, so SameSite=Strict cookies still go
+// with them). Every request that can change something (anything but GET/HEAD) must:
+//   - not come from another origin: if the browser says where it came from (Sec-Fetch-Site), it must be same-origin;
+//   - carry Content-Type: application/json. A cross-origin page can only send that after a CORS preflight, which
+//     this Worker never approves, so older browsers without Sec-Fetch-Site are covered too.
+// Returns the refusal, or null.
+const SAFE_METHODS = new Set(["GET", "HEAD"]);
+export function refuseForgedRequest(request) {
+  if (SAFE_METHODS.has(request.method)) return null;
+  const site = request.headers.get("sec-fetch-site");
+  if (site !== null && site !== "same-origin") {
+    return Response.json({ error: "Requests from other sites are not allowed" }, { status: 403, headers: NO_STORE });
+  }
+  const type = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (type !== "application/json") {
+    return Response.json({ error: "Send JSON (Content-Type: application/json)" }, { status: 415, headers: NO_STORE });
+  }
+  return null;
+}
+
 async function serve(request, env) {
+  const forged = refuseForgedRequest(request);
+  if (forged) return forged;
   const url = new URL(request.url);
   const api = isApi(url.pathname);
   const v = await resolveVendor(env, url.hostname);

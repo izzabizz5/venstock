@@ -46,7 +46,7 @@ test("the same email at two vendors is two separate accounts: each password work
   assert.equal((await server.client("demo.localhost").post("/api/auth/login", loginBody(TWIN))).status, 400, "twin's password at demo");
   const demo = server.client("demo.localhost");
   await demo.login(USERS.admin);
-  const twinCookie = { cookie: `pos_session=${demo.cookies.pos_session}` };
+  const twinCookie = { cookie: `__Host-pos_session=${demo.cookies["__Host-pos_session"]}` };
   assert.equal((await rawRequest(server.port, { host: "twin.localhost", path: "/api/auth/me", headers: twinCookie })).status, 401,
     "demo's session for that email is not a session at twin");
 });
@@ -60,7 +60,7 @@ test("a full-session cookie copied to another vendor's subdomain is not logged i
   const demo = server.client("demo.localhost");
   await demo.login(USERS.admin);
   assert.equal((await demo.get("/api/items")).status, 200);
-  const cookie = `pos_session=${demo.cookies.pos_session}`;
+  const cookie = `__Host-pos_session=${demo.cookies["__Host-pos_session"]}`;
   for (const path of ["/api/auth/me", "/api/items", "/api/settings", "/api/users"]) {
     const r = await rawRequest(server.port, { host: "acme.localhost", path, headers: { cookie } });
     assert.equal(r.status, 401, `acme ${path} with demo's cookie`);
@@ -74,7 +74,7 @@ test("a full-session cookie copied to another vendor's subdomain is not logged i
 test("a half-finished login (password only) cannot be completed on another vendor's subdomain", async () => {
   const demo = server.client("demo.localhost");
   assert.equal((await demo.post("/api/auth/login", loginBody(USERS.admin))).status, 200);
-  const cookie = `pos_session=${demo.cookies.pos_session}`;
+  const cookie = `__Host-pos_session=${demo.cookies["__Host-pos_session"]}`;
   const code = await totpCode(USERS.admin.totpSecret, Math.floor(Date.now() / 30000) + 1);
   const mfa = await rawRequest(server.port, { host: "acme.localhost", path: "/api/auth/mfa", method: "POST", headers: { cookie }, body: { code } });
   assert.equal(mfa.status, 401);

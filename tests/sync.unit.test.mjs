@@ -9,7 +9,8 @@ const { classifyUpload, uploadPending, shellFetch, failedCsv } = globalThis.Vens
 test("only 400 and 422 mark a sale failed; 2xx is done; everything else retries", () => {
   for (const s of [200, 201, 204]) assert.equal(classifyUpload(s), "done", String(s));
   for (const s of [400, 422]) assert.equal(classifyUpload(s), "failed", String(s));
-  for (const s of [0, 401, 403, 404, 405, 408, 409, 413, 429, 500, 502, 503, 504]) assert.equal(classifyUpload(s), "retry", String(s));
+  // 403 (suspended, or refused as a cross-site request) and 415 (wrong content type) never mark a sale failed.
+  for (const s of [0, 401, 403, 404, 405, 408, 409, 413, 415, 429, 500, 502, 503, 504]) assert.equal(classifyUpload(s), "retry", String(s));
 });
 
 const sale = (n) => ({ client_id: `id-${n}`, items: [{ qty: 1, name: `item ${n}`, price_cents: 100 }], created_at: "2026-11-21T10:00:00.000Z", payment_method: "cash" });
@@ -27,7 +28,7 @@ test("upload pass: uploaded sales leave the queue, refused ones move to failed w
 });
 
 test("upload pass: the first retry answer stops the pass and keeps that sale and everything after it queued", async () => {
-  for (const status of [0, 401, 403, 404, 409, 429, 500, 503]) {
+  for (const status of [0, 401, 403, 404, 409, 415, 429, 500, 503]) {
     const seen = [];
     const r = await uploadPending([sale(1), sale(2), sale(3)], async (s) => { seen.push(s.client_id); return s.client_id === "id-2" ? { status } : { status: 200 }; });
     assert.deepEqual(r.pending.map((s) => s.client_id), ["id-2", "id-3"], String(status));

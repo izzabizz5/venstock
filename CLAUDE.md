@@ -91,6 +91,13 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   Enforced by `tests/lockdown.unit.test.mjs`: only `src/worker.js`, `src/lib/tenant.js` and `src/lib/control.js`
   mention `env`; only `tenant.js` reads `env[...]` (the derived binding); only `control.js` touches `CONTROL`;
   `handleApi` gets exactly `{ request, db, tenant, params }`. A new file in `src/` must be added to that test.
+- Every request except GET/HEAD must be `Content-Type: application/json` (415 otherwise) and, when the browser sends
+  `Sec-Fetch-Site`, `same-origin` (403 otherwise): sibling subdomains are same-site, so SameSite cookies alone don't
+  stop forged writes (`src/worker.js` `refuseForgedRequest`). GET requests never change anything.
+- Session cookies use the `__Host-` prefix (`__Host-pos_session`; the platform admin its own name), with Secure,
+  HttpOnly, SameSite=Strict, Path=/ and never a Domain; only the exact name is read.
+- Vendor slugs: 3-32 of `a-z 0-9 -`, no hyphen at either end, never `--` in positions 3-4 (`xn--` look-alikes).
+  `isValidSlug` in `src/lib/tenant.js` is the one rule for `create-tenant` and the hostname parser.
 - Server errors answer a generic "Something went wrong" (500). Details go to the log only: method, path, vendor id
   and the error, never request bodies (customer notes, passwords) and never `e.message` in a response.
 - Schema changes are new numbered files in `migrations/vendor/` or `migrations/control/`, recorded with
@@ -117,7 +124,7 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   500 miswired (logged), 503 being set up, suspended = shell only (API 403); then `/api/*` goes to `src/api.js`
   with only that vendor's database, and everything else is a static file.
 - `src/api.js`: the API handler (`handleApi`): items, shows, sales, settings, export, plus auth/users dispatch.
-- `src/lib/auth.js`: invite-only sign-up, PBKDF2 passwords, TOTP 2FA, session cookie (`pos_session`),
+- `src/lib/auth.js`: invite-only sign-up, PBKDF2 passwords, TOTP 2FA, session cookie (`__Host-pos_session`),
   `/api/auth/*` and admin `/api/users/*` routes.
 - `src/lib/tenant.js`: hostname → slug → registry row → `DB_T<id>` (derived from the id, must equal
   `tenants.db_binding`) → `vendor_identity` check (once per isolate). The only code that reads `env[binding]`.

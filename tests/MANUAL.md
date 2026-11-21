@@ -3,23 +3,45 @@
 Things the automated tests can't cover because they need a real browser. Run them when the step that
 introduces them lands, and note the browser, version and date at the bottom.
 
-Start the app locally first (see CLAUDE.md for the current command), then use the port it prints.
+## Setup (once)
+The app only answers on a vendor's own subdomain (`<slug>.localhost:8788`); plain `localhost:8788` says "Not found".
+From the repo folder, with Node 22.13 or later:
+```bash
+node scripts/migrate.mjs --control                                   # the vendor registry
+node scripts/create-tenant.mjs demo "Demo Shop" you@example.com      # prints an invite link: keep it
+npx wrangler dev -c .wrangler-generated/local/wrangler.toml --persist-to .wrangler/state   # leave running
+```
+Open the invite link (`http://demo.localhost:8788/#invite=…`), set a password and scan the QR code with an
+authenticator app. Locked out: `node scripts/add-admin.mjs --tenant demo you@example.com` prints a new invite.
+After creating another vendor, stop `wrangler dev` (Ctrl+C) and start it again: it only picks up new vendor
+databases when it starts.
 
 ## Step 1: `*.localhost` is a secure context (Chrome and Firefox)
 The app needs a secure context: `crypto.randomUUID()` gives each offline sale its ID, and the login cookie is
 marked `Secure`.
-1. Open `http://a.localhost:<port>/` (it should load the Venstock app, not a "site can't be reached" page).
+1. Open `http://demo.localhost:8788/` (it should load the Venstock app, not a "site can't be reached" page).
 2. Open the developer console and run `window.isSecureContext`. Expected: `true`.
 3. Run `crypto.randomUUID()`. Expected: a UUID, not an error.
 4. Repeat in the other browser.
 
 ## Step 4: each subdomain keeps its own login
-Needs two vendors: `node scripts/create-tenant.mjs a "Shop A" a@example.test` and the same for `b`.
-1. Log in at `http://a.localhost:<port>/` as a user of vendor A.
-2. In the same browser, open `http://b.localhost:<port>/`. Expected: the login screen, not vendor A's data.
-3. Developer tools → Application (Chrome) or Storage (Firefox) → Cookies: `a.localhost` has `pos_session`,
-   `b.localhost` has none.
+Needs a second vendor (vendor names are 3-32 characters): `node scripts/create-tenant.mjs acme "Acme Crafts"
+you+acme@example.com`, then restart `wrangler dev`. Vendor A is `demo`, vendor B is `acme`.
+1. Log in at `http://demo.localhost:8788/` as a user of vendor A.
+2. In the same browser, open `http://acme.localhost:8788/`. Expected: the login screen, not vendor A's data.
+3. Developer tools → Application (Chrome) or Storage (Firefox) → Cookies: `demo.localhost` has `__Host-pos_session`,
+   `acme.localhost` has none.
 4. Log in at B as a vendor-B user, go back to A, reload. Expected: still logged in as the A user, showing A's data.
+
+## The `__Host-` session cookie is accepted on `http://*.localhost` (Chrome and Firefox)
+The login cookie is `__Host-pos_session`: browsers only accept it with Secure, Path=/ and no Domain, from a secure
+origin. Local dev is plain http, which browsers treat as secure only for localhost names, so check it works there.
+1. Log out if logged in, then log in at `http://demo.localhost:8788/` (password and 6-digit code).
+2. Expected: you stay logged in after a reload. Developer tools → Cookies for `demo.localhost`: one cookie,
+   `__Host-pos_session`, with Secure, HttpOnly, SameSite Strict, Path `/`, and no Domain (host-only).
+3. An old `pos_session` cookie from before the rename may still be listed; it's ignored. Delete it to tidy up.
+4. Repeat in the other browser. If either browser refuses the cookie (login succeeds but every reload shows the
+   login screen again), note it here: local dev would then need the unprefixed name.
 
 ## The app survives server trouble (503) but not an unknown shop (404)
 The service worker shows the cached app when the server answers 500, 502, 503 or 504, and shows 404 and 403 as

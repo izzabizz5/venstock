@@ -98,10 +98,22 @@ async function newInvite() {
 }
 
 // ---------- sessions ----------
-const COOKIE = "pos_session";
-const cookie = (token, maxAgeSeconds) =>
-  `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
-const readToken = (request) => (request.headers.get("cookie") || "").match(/(?:^|;\s*)pos_session=([^;]+)/)?.[1];
+// The __Host- prefix makes browsers accept the cookie only with Secure, Path=/ and NO Domain, from a secure origin
+// (https, or localhost). So it is always host-only, and a sibling subdomain can't set or overwrite it ("cookie
+// tossing"): a cookie it sets for the whole domain can't use this name. The platform admin uses its own name.
+export const VENDOR_COOKIE = "__Host-pos_session";
+export const sessionCookie = (name, token, maxAgeSeconds) =>
+  `${name}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAgeSeconds}`;
+// The value of exactly this cookie name (no prefix or suffix matches), or undefined.
+export function readCookie(request, name) {
+  for (const part of (request.headers.get("cookie") || "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim() || undefined;
+  }
+  return undefined;
+}
+const cookie = (token, maxAgeSeconds) => sessionCookie(VENDOR_COOKIE, token, maxAgeSeconds);
+const readToken = (request) => readCookie(request, VENDOR_COOKIE);
 
 async function startSession(db, userId, mfaOk) {
   const token = randomToken();
