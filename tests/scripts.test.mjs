@@ -64,9 +64,12 @@ test("a second vendor gets its own database; each owner exists only in their own
 
 test("create-tenant refuses bad, reserved and taken slugs, bad names and emails, and writes nothing", () => {
   const before = sql("CONTROL", "SELECT count(*) AS n FROM tenants")[0].n;
-  for (const slug of ["Acme", "ab", "-acme", "acme-", "ac_me", "a.b", "x".repeat(33), "admin", "www", "staging", "acme"]) {
+  for (const slug of ["Acme", "ab", "-acme", "acme-", "ac_me", "a.b", "x".repeat(33), "admin", "www", "staging", "acme",
+    "xn--dmo-xla", "xn--80ak6aa92e", "ab--cd", "ab--", "démo", "shop!", "shop shop"]) {
     assert.notEqual(script("create-tenant.mjs", [slug, "Some Shop", "x@example.test"]).code, 0, `slug ${slug}`);
   }
+  const xn = script("create-tenant.mjs", ["xn--dmo-xla", "Look-alike", "x@example.test"]);
+  assert.match(xn.out, /not "--" as the 3rd and 4th characters/);
   assert.notEqual(script("create-tenant.mjs", ["fine-slug", "   ", "a@example.test"]).code, 0, "blank name");
   assert.notEqual(script("create-tenant.mjs", ["fine-slug", "Bad\u0007Name", "a@example.test"]).code, 0, "control char");
   assert.notEqual(script("create-tenant.mjs", ["fine-slug", "Fine", "not-an-email"]).code, 0, "bad email");

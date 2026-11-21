@@ -19,7 +19,7 @@ import { parseArgs, d1Target, die, stmt, EMAIL, newInvite, ROOT } from "./lib/d1
 import { checkRepoMigrations, migrationFiles } from "./lib/manifest.mjs";
 import { runMigrations } from "./migrate.mjs";
 import { vendorBinding, readBaseToml } from "./lib/wrangler-config.mjs";
-import { RESERVED_SLUGS } from "../src/lib/tenant.js";
+import { RESERVED_SLUGS, isValidSlug } from "../src/lib/tenant.js";
 
 const USAGE = 'Usage: node scripts/create-tenant.mjs <slug> "<Vendor name>" owner@example.com [--remote]\n' +
   "       node scripts/create-tenant.mjs --resume <slug> [--remote]\n       node scripts/create-tenant.mjs --abandon <slug> [--remote]";
@@ -28,7 +28,6 @@ const { positional, flags, remote } = parseArgs(process.argv.slice(2), {
 });
 if (flags["--resume"] && flags["--abandon"]) die(USAGE);
 const now = new Date().toISOString();
-const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$/;
 
 const t = d1Target({ remote });
 if (!t.tableExists("CONTROL", "tenants")) die(`The control database isn't set up: run node scripts/migrate.mjs --control${remote ? " --remote" : ""} first.`);
@@ -51,7 +50,7 @@ function create() {
   if (positional.length !== 3) die(USAGE);
   const [slug, rawName, email] = positional;
   const name = rawName.trim();
-  if (!SLUG.test(slug)) die(`Bad slug "${slug}": use 3-32 lowercase letters, digits and hyphens (not at the start or end).`);
+  if (!isValidSlug(slug)) die(`Bad slug "${slug}": use 3-32 lowercase letters, digits and hyphens (not at the start or end, and not "--" as the 3rd and 4th characters, e.g. "xn--").`);
   if (RESERVED_SLUGS.has(slug)) die(`"${slug}" is reserved and can't be a vendor. Reserved: ${[...RESERVED_SLUGS].join(", ")}.`);
   if (!name || name.length > 100 || /[\u0000-\u001f\u007f]/.test(name)) die("The vendor name must be 1-100 characters with no control characters.");
   if (!EMAIL.test(email)) die(`Bad email address "${email}".\n${USAGE}`);

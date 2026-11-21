@@ -13,17 +13,21 @@ export const RESERVED_SLUGS = new Set([
   "login", "static", "assets", "cdn", "dev", "staging",
 ]);
 
-// One DNS label: lowercase letters, digits and inner hyphens, 1-63 characters.
-const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+// A vendor slug: 3-32 lowercase letters, digits and hyphens, no hyphen at either end, and never "--" in positions
+// 3-4. That shape is reserved for internationalized names ("xn--…" punycode), which can display as look-alikes of
+// another shop's name. The one rule for both create-tenant and the hostname parser.
+const SLUG = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/;
+export const isValidSlug = (s) => typeof s === "string" && SLUG.test(s) && s.slice(2, 4) !== "--";
 
-// Pure: { kind: "tenant", slug } | { kind: "reserved", slug } | { kind: "none" }.
+// Pure: { kind: "tenant", slug } | { kind: "reserved", slug } | { kind: "none" }. Anything that can't be a vendor
+// slug is "none" here, so it never reaches the control database.
 export function parseHost(hostname, baseDomain) {
   const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
   const base = String(baseDomain || "").toLowerCase().replace(/^\.|\.$/g, "");
   if (!base || !host.endsWith("." + base)) return { kind: "none" };
   const slug = host.slice(0, -(base.length + 1));
-  if (!LABEL.test(slug)) return { kind: "none" }; // empty, or more than one level (contains a dot), or bad characters
-  return RESERVED_SLUGS.has(slug) ? { kind: "reserved", slug } : { kind: "tenant", slug };
+  if (RESERVED_SLUGS.has(slug)) return { kind: "reserved", slug };
+  return isValidSlug(slug) ? { kind: "tenant", slug } : { kind: "none" }; // also: empty, or more than one level
 }
 
 // The binding name for a vendor's database. Only ever derived from the registry's numeric id.

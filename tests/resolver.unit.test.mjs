@@ -173,3 +173,12 @@ test("resolver: an unbound vendor never falls back to CONTROL or another binding
   assert.equal(r.kind, "settingUp");
   assert.equal(r.db, undefined);
 });
+
+test("resolver: hostnames that can't be a vendor slug never query the control database", async () => {
+  const { resolve, control } = setup([row(1, "demo")], { DB_T1: identityDb(1, "demo") });
+  for (const h of ["ab.localhost", "xn--dmo-xla.localhost", "ab--cd.localhost", `${"x".repeat(33)}.localhost`, "-abc.localhost",
+    "a_b.localhost", "x.demo.localhost", "localhost", "", "demo.localhost.evil.com"]) {
+    assert.deepEqual(await resolve(h), { kind: "notFound" }, h);
+  }
+  assert.deepEqual(control.calls, []);
+});
