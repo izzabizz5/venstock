@@ -5,9 +5,12 @@
 //   - vendor still being set up (provisioning, or its database isn't bound in this deploy yet): 503 for everything;
 //   - suspended vendor: the app shell is served (so the app can say so and the vendor can export failed sales),
 //     every /api request gets 403;
-//   - active vendor: /api goes to the API with ONLY that vendor's database; everything else is a static file.
+//   - active vendor: /api goes to the API with ONLY that vendor's database; everything else is a static file;
+//   - admin.<BASE_DOMAIN>: the platform admin page and API (src/platform.js), with ONLY the control database.
 import { handleApi } from "./api.js";
+import { handlePlatformApi } from "./platform.js";
 import { resolveVendor } from "./lib/tenant.js";
+
 
 const isApi = (path) => path === "/api" || path.startsWith("/api/");
 const NO_STORE = { "cache-control": "no-store" };
@@ -77,8 +80,16 @@ async function serve(request, env) {
         ? Response.json({ error: "This shop is being set up. Try again in a few minutes." }, { status: 503, headers: { ...NO_STORE, "retry-after": "120" } })
         : new Response(SETTING_UP_PAGE, { status: 503, headers: { "content-type": "text/html; charset=utf-8", ...NO_STORE, "retry-after": "120" } });
     case "suspended":
+      if (!api && /^\/admin(\.html|\.js)?$/.test(url.pathname)) return plain(404, "Not found", false);
       if (!api) return env.ASSETS.fetch(request);
       return Response.json({ error: "This account is suspended. Contact Venstock support." }, { status: 403, headers: NO_STORE });
+    case "platform": {
+      // The platform admin page; everything else (script, styles) is an ordinary static file.
+      if (!api) return env.ASSETS.fetch(url.pathname === "/" || url.pathname === "/index.html" ? new Request(new URL("/admin", url), request) : request);
+      const route = apiRoute(url);
+      if (!route) return Response.json({ error: "Not found" }, { status: 404 });
+      return handlePlatformApi({ request, db: v.db, params: { route } });
+    }
     case "active":
       break;
     default:
@@ -86,14 +97,23 @@ async function serve(request, env) {
       return plain(500, "Something went wrong", api);
   }
 
+  // The platform admin page belongs to admin.<BASE_DOMAIN> only.
+  if (!api && /^\/admin(\.html|\.js)?$/.test(url.pathname)) return plain(404, "Not found", false);
   if (!api) return env.ASSETS.fetch(request);
-  // The decoded path segments after /api (the same shape Pages Functions gave [[route]].js).
-  let route;
-  try {
-    route = url.pathname.slice(4).split("/").filter(Boolean).map(decodeURIComponent);
-  } catch {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  const route = apiRoute(url);
+  if (!route) return Response.json({ error: "Not found" }, { status: 404 });
+
   // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.
   return handleApi({ request, db: v.db, tenant: v.tenant, params: { route } });
 }
+
+// The decoded path segments after /api (the same shape Pages Functions gave [[route]].js), or null if undecodable.
+function apiRoute(url) {
+  try {
+    return url.pathname.slice(4).split("/").filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return null;
+  }
+}
+
+

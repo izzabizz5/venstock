@@ -21,7 +21,7 @@ const PBKDF2_ITERATIONS = 100000; // the most Cloudflare Workers allows
 const b64u = (buf) =>
   btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
-const randomToken = (bytes = 32) => b64u(crypto.getRandomValues(new Uint8Array(bytes)));
+export const randomToken = (bytes = 32) => b64u(crypto.getRandomValues(new Uint8Array(bytes)));
 export const sha256 = async (s) => b64u(await crypto.subtle.digest("SHA-256", enc.encode(s)));
 
 function sameString(a, b) {
@@ -112,33 +112,6 @@ export function readCookie(request, name) {
   }
   return undefined;
 }
-const cookie = (token, maxAgeSeconds) => sessionCookie(VENDOR_COOKIE, token, maxAgeSeconds);
-const readToken = (request) => readCookie(request, VENDOR_COOKIE);
-
-async function startSession(db, userId, mfaOk) {
-  const token = randomToken();
-  const ms = mfaOk ? SESSION_DAYS * DAY : PRE_MFA_MINUTES * MINUTE;
-  await db.batch([
-    db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()),
-    db.prepare("INSERT INTO sessions (id, user_id, mfa_ok, expires_at, created_at) VALUES (?,?,?,?,?)")
-      .bind(await sha256(token), userId, mfaOk ? 1 : 0, Date.now() + ms, new Date().toISOString()),
-  ]);
-  return cookie(token, Math.floor(ms / 1000));
-}
-
-// The logged-in session for this request (joined with its user), or null.
-export async function currentSession(db, request) {
-  const token = readToken(request);
-  if (!token) return null;
-  return db
-    .prepare(
-      `SELECT s.id AS session_id, s.mfa_ok, s.mfa_failures, u.*
-       FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.id = ? AND s.expires_at > ?`
-    )
-    .bind(await sha256(token), Date.now())
-    .first();
-}
 
 // What the app needs to know about the person logged in.
 const me = (u, mfaOk) => ({
@@ -149,124 +122,167 @@ const me = (u, mfaOk) => ({
 const str = (v, max = 200) => String(v ?? "").trim().slice(0, max);
 const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-// ---------- /api/auth/* (the only routes open without a login) ----------
-export async function authRoutes({ db, request, b, c, m, body }) {
-  const sess = await currentSession(db, request);
+// Login, 6-digit codes, invites and sessions for one "realm": a vendor's users (in that vendor's database) or the
+// Venstock platform admins (in the control database). Same rules for both; separate tables and cookie names.
+export const VENDOR_REALM = Object.freeze({ users: "users", sessions: "sessions", fk: "user_id", cookie: VENDOR_COOKIE, issuer: "Venstock", isAdmin: false });
+export const PLATFORM_COOKIE = "__Host-pos_platform";
+export const PLATFORM_REALM = Object.freeze({ users: "platform_admins", sessions: "platform_sessions", fk: "admin_id", cookie: PLATFORM_COOKIE, issuer: "Venstock admin", isAdmin: true });
 
-  if (b === "me" && m === "GET") {
+export function makeAuth(R) {
+  const cookie = (token, maxAgeSeconds) => sessionCookie(R.cookie, token, maxAgeSeconds);
+  const readToken = (request) => readCookie(request, R.cookie);
+  // Platform admins are admins by definition (their table has no is_admin column).
+  const meR = (u, mfaOk) => ({ ...me(u, mfaOk), ...(R.isAdmin ? { is_admin: true } : {}) });
+
+  async function startSession(db, userId, mfaOk) {
+    const token = randomToken();
+    const ms = mfaOk ? SESSION_DAYS * DAY : PRE_MFA_MINUTES * MINUTE;
+    await db.batch([
+      db.prepare(`DELETE FROM ${R.sessions} WHERE expires_at < ?`).bind(Date.now()),
+      db.prepare(`INSERT INTO ${R.sessions} (id, ${R.fk}, mfa_ok, expires_at, created_at) VALUES (?,?,?,?,?)`)
+        .bind(await sha256(token), userId, mfaOk ? 1 : 0, Date.now() + ms, new Date().toISOString()),
+    ]);
+    return cookie(token, Math.floor(ms / 1000));
+  }
+
+  // The logged-in session for this request (joined with its user), or null.
+  async function currentSession(db, request) {
+    const token = readToken(request);
+    if (!token) return null;
+    return db
+      .prepare(
+        `SELECT s.id AS session_id, s.mfa_ok, s.mfa_failures, u.*
+         FROM ${R.sessions} s JOIN ${R.users} u ON u.id = s.${R.fk}
+         WHERE s.id = ? AND s.expires_at > ?`
+      )
+      .bind(await sha256(token), Date.now())
+      .first();
+  }
+
+  // ---------- /api/auth/* (the only routes open without a login) ----------
+  async function authRoutes({ db, request, b, c, m, body }) {
+    const sess = await currentSession(db, request);
+
+    if (b === "me" && m === "GET") {
+      if (!sess) return fail("Please log in", 401);
+      return json(meR(sess, sess.mfa_ok));
+    }
+
+    if (b === "login" && m === "POST") {
+      const email = str(body.email);
+      const user = await db.prepare(`SELECT * FROM ${R.users} WHERE email = ?`).bind(email).first();
+      if (user && user.locked_until > Date.now()) {
+        const mins = Math.ceil((user.locked_until - Date.now()) / MINUTE);
+        return fail(`Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`, 429);
+      }
+      const ok = await checkPassword(String(body.password ?? ""), user?.password_hash);
+      if (!ok) {
+        if (user) {
+          const tries = user.failed_logins + 1;
+          await db.prepare(`UPDATE ${R.users} SET failed_logins = ?, locked_until = ? WHERE id = ?`)
+            .bind(tries >= MAX_PASSWORD_TRIES ? 0 : tries, tries >= MAX_PASSWORD_TRIES ? Date.now() + LOCK_MINUTES * MINUTE : 0, user.id)
+            .run();
+        }
+        return fail("Wrong email or password.");
+      }
+      await db.prepare(`UPDATE ${R.users} SET failed_logins = 0, locked_until = 0 WHERE id = ?`).bind(user.id).run();
+      return json(meR(user, false), 200, { "set-cookie": await startSession(db, user.id, false) });
+    }
+
+    if (b === "signup" && m === "POST") {
+      const email = str(body.email);
+      const password = String(body.password ?? "");
+      const bad = "That email and invite code don't match, or the invite has expired. Ask the owner for a new invite.";
+      const user = await db.prepare(`SELECT * FROM ${R.users} WHERE email = ?`).bind(email).first();
+      if (user && user.locked_until > Date.now()) return fail("Too many tries. Wait 15 minutes and try again.", 429);
+      const inviteOk = user && user.invite_hash && user.invite_expires > Date.now()
+        && sameString(await sha256(normalizeInvite(body.invite)), user.invite_hash);
+      if (!inviteOk) {
+        if (user) {
+          const tries = user.failed_logins + 1;
+          await db.prepare(`UPDATE ${R.users} SET failed_logins = ?, locked_until = ? WHERE id = ?`)
+            .bind(tries >= MAX_PASSWORD_TRIES ? 0 : tries, tries >= MAX_PASSWORD_TRIES ? Date.now() + LOCK_MINUTES * MINUTE : 0, user.id)
+            .run();
+        }
+        return fail(bad);
+      }
+      if (password.length < MIN_PASSWORD) return fail(`Use a password of at least ${MIN_PASSWORD} characters.`);
+      if (password.length > 200) return fail("That password is too long.");
+      await db.batch([
+        db.prepare(
+          `UPDATE ${R.users} SET password_hash = ?, invite_hash = NULL, invite_expires = NULL, totp_secret = NULL,
+             totp_enabled = 0, totp_last_step = 0, failed_logins = 0, locked_until = 0 WHERE id = ?`
+        ).bind(await hashPassword(password), user.id),
+        db.prepare(`DELETE FROM ${R.sessions} WHERE ${R.fk} = ?`).bind(user.id),
+      ]);
+      const fresh = { ...user, totp_enabled: 0 };
+      return json(meR(fresh, false), 200, { "set-cookie": await startSession(db, user.id, false) });
+    }
+
+    if (b === "logout" && m === "POST") {
+      if (sess) await db.prepare(`DELETE FROM ${R.sessions} WHERE id = ?`).bind(sess.session_id).run();
+      return json({ ok: true }, 200, { "set-cookie": cookie("", 0) });
+    }
+
+    // Everything below needs at least a correct password.
     if (!sess) return fail("Please log in", 401);
-    return json(me(sess, sess.mfa_ok));
-  }
 
-  if (b === "login" && m === "POST") {
-    const email = str(body.email);
-    const user = await db.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
-    if (user && user.locked_until > Date.now()) {
-      const mins = Math.ceil((user.locked_until - Date.now()) / MINUTE);
-      return fail(`Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`, 429);
-    }
-    const ok = await checkPassword(String(body.password ?? ""), user?.password_hash);
-    if (!ok) {
-      if (user) {
-        const tries = user.failed_logins + 1;
-        await db.prepare("UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?")
-          .bind(tries >= MAX_PASSWORD_TRIES ? 0 : tries, tries >= MAX_PASSWORD_TRIES ? Date.now() + LOCK_MINUTES * MINUTE : 0, user.id)
-          .run();
+    // First-time MFA: hand out a secret for the authenticator app. Only before MFA is turned on,
+    // so someone who only has the password can't replace an existing authenticator.
+    if (b === "mfa" && c === "setup" && m === "POST") {
+      if (sess.totp_enabled) return fail("Two-step login is already set up.");
+      let secret = sess.totp_secret;
+      if (!secret) {
+        secret = newTotpSecret();
+        await db.prepare(`UPDATE ${R.users} SET totp_secret = ? WHERE id = ?`).bind(secret, sess.id).run();
       }
-      return fail("Wrong email or password.");
+      const label = encodeURIComponent(`${R.issuer}:${sess.email}`);
+      return json({ secret, uri: `otpauth://totp/${label}?secret=${secret}&issuer=${encodeURIComponent(R.issuer)}&digits=6&period=30` });
     }
-    await db.prepare("UPDATE users SET failed_logins = 0, locked_until = 0 WHERE id = ?").bind(user.id).run();
-    return json(me(user, false), 200, { "set-cookie": await startSession(db, user.id, false) });
-  }
 
-  if (b === "signup" && m === "POST") {
-    const email = str(body.email);
-    const password = String(body.password ?? "");
-    const bad = "That email and invite code don't match, or the invite has expired. Ask the owner for a new invite.";
-    const user = await db.prepare("SELECT * FROM users WHERE email = ?").bind(email).first();
-    if (user && user.locked_until > Date.now()) return fail("Too many tries. Wait 15 minutes and try again.", 429);
-    const inviteOk = user && user.invite_hash && user.invite_expires > Date.now()
-      && sameString(await sha256(normalizeInvite(body.invite)), user.invite_hash);
-    if (!inviteOk) {
-      if (user) {
-        const tries = user.failed_logins + 1;
-        await db.prepare("UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?")
-          .bind(tries >= MAX_PASSWORD_TRIES ? 0 : tries, tries >= MAX_PASSWORD_TRIES ? Date.now() + LOCK_MINUTES * MINUTE : 0, user.id)
-          .run();
+    if (b === "mfa" && !c && m === "POST") {
+      if (sess.mfa_ok) return json(meR(sess, true));
+      const step = await checkTotp(sess.totp_secret, body.code, sess.totp_last_step);
+      if (!step) {
+        if (sess.mfa_failures + 1 >= MAX_CODE_TRIES) {
+          await db.prepare(`DELETE FROM ${R.sessions} WHERE id = ?`).bind(sess.session_id).run();
+          return fail("Too many wrong codes. Log in again.", 401, { "set-cookie": cookie("", 0) });
+        }
+        await db.prepare(`UPDATE ${R.sessions} SET mfa_failures = mfa_failures + 1 WHERE id = ?`).bind(sess.session_id).run();
+        return fail("That code didn't work. Check the time on your phone and use the newest code.");
       }
-      return fail(bad);
+      // Code is good: turn MFA on (first time) and swap the half-logged-in session for a full one.
+      await db.batch([
+        db.prepare(`UPDATE ${R.users} SET totp_enabled = 1, totp_last_step = ? WHERE id = ?`).bind(step, sess.id),
+        db.prepare(`DELETE FROM ${R.sessions} WHERE id = ?`).bind(sess.session_id),
+      ]);
+      return json(meR(sess, true), 200, { "set-cookie": await startSession(db, sess.id, true) });
     }
-    if (password.length < MIN_PASSWORD) return fail(`Use a password of at least ${MIN_PASSWORD} characters.`);
-    if (password.length > 200) return fail("That password is too long.");
-    await db.batch([
-      db.prepare(
-        `UPDATE users SET password_hash = ?, invite_hash = NULL, invite_expires = NULL, totp_secret = NULL,
-           totp_enabled = 0, totp_last_step = 0, failed_logins = 0, locked_until = 0 WHERE id = ?`
-      ).bind(await hashPassword(password), user.id),
-      db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(user.id),
-    ]);
-    const fresh = { ...user, totp_enabled: 0 };
-    return json(me(fresh, false), 200, { "set-cookie": await startSession(db, user.id, false) });
-  }
 
-  if (b === "logout" && m === "POST") {
-    if (sess) await db.prepare("DELETE FROM sessions WHERE id = ?").bind(sess.session_id).run();
-    return json({ ok: true }, 200, { "set-cookie": cookie("", 0) });
-  }
+    // Everything below needs a full login.
+    if (!sess.mfa_ok) return fail("Please log in", 401);
 
-  // Everything below needs at least a correct password.
-  if (!sess) return fail("Please log in", 401);
-
-  // First-time MFA: hand out a secret for the authenticator app. Only before MFA is turned on,
-  // so someone who only has the password can't replace an existing authenticator.
-  if (b === "mfa" && c === "setup" && m === "POST") {
-    if (sess.totp_enabled) return fail("Two-step login is already set up.");
-    let secret = sess.totp_secret;
-    if (!secret) {
-      secret = newTotpSecret();
-      await db.prepare("UPDATE users SET totp_secret = ? WHERE id = ?").bind(secret, sess.id).run();
+    if (b === "password" && m === "POST") {
+      if (!(await checkPassword(String(body.current ?? ""), sess.password_hash))) return fail("Your current password is wrong.");
+      const next = String(body.password ?? "");
+      if (next.length < MIN_PASSWORD) return fail(`Use a password of at least ${MIN_PASSWORD} characters.`);
+      if (next.length > 200) return fail("That password is too long.");
+      // log out every other device
+      await db.batch([
+        db.prepare(`UPDATE ${R.users} SET password_hash = ? WHERE id = ?`).bind(await hashPassword(next), sess.id),
+        db.prepare(`DELETE FROM ${R.sessions} WHERE ${R.fk} = ? AND id != ?`).bind(sess.id, sess.session_id),
+      ]);
+      return json({ ok: true });
     }
-    const label = encodeURIComponent(`Venstock:${sess.email}`);
-    return json({ secret, uri: `otpauth://totp/${label}?secret=${secret}&issuer=Venstock&digits=6&period=30` });
+
+    return fail("Not found", 404);
   }
 
-  if (b === "mfa" && !c && m === "POST") {
-    if (sess.mfa_ok) return json(me(sess, true));
-    const step = await checkTotp(sess.totp_secret, body.code, sess.totp_last_step);
-    if (!step) {
-      if (sess.mfa_failures + 1 >= MAX_CODE_TRIES) {
-        await db.prepare("DELETE FROM sessions WHERE id = ?").bind(sess.session_id).run();
-        return fail("Too many wrong codes. Log in again.", 401, { "set-cookie": cookie("", 0) });
-      }
-      await db.prepare("UPDATE sessions SET mfa_failures = mfa_failures + 1 WHERE id = ?").bind(sess.session_id).run();
-      return fail("That code didn't work. Check the time on your phone and use the newest code.");
-    }
-    // Code is good: turn MFA on (first time) and swap the half-logged-in session for a full one.
-    await db.batch([
-      db.prepare("UPDATE users SET totp_enabled = 1, totp_last_step = ? WHERE id = ?").bind(step, sess.id),
-      db.prepare("DELETE FROM sessions WHERE id = ?").bind(sess.session_id),
-    ]);
-    return json(me(sess, true), 200, { "set-cookie": await startSession(db, sess.id, true) });
-  }
-
-  // Everything below needs a full login.
-  if (!sess.mfa_ok) return fail("Please log in", 401);
-
-  if (b === "password" && m === "POST") {
-    if (!(await checkPassword(String(body.current ?? ""), sess.password_hash))) return fail("Your current password is wrong.");
-    const next = String(body.password ?? "");
-    if (next.length < MIN_PASSWORD) return fail(`Use a password of at least ${MIN_PASSWORD} characters.`);
-    if (next.length > 200) return fail("That password is too long.");
-    // log out every other device
-    await db.batch([
-      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(await hashPassword(next), sess.id),
-      db.prepare("DELETE FROM sessions WHERE user_id = ? AND id != ?").bind(sess.id, sess.session_id),
-    ]);
-    return json({ ok: true });
-  }
-
-  return fail("Not found", 404);
+  return { currentSession, authRoutes };
 }
+
+// The vendor realm, used by src/api.js.
+export const { currentSession, authRoutes } = makeAuth(VENDOR_REALM);
 
 // ---------- /api/users/* (admins only: who is allowed to log in) ----------
 export async function userRoutes({ db, b, c, m, body, sess }) {

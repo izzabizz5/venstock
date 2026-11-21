@@ -1,5 +1,6 @@
-// The ONLY module that reads the control database (binding CONTROL): the vendor registry. Request handlers never see
-// it; src/lib/tenant.js calls lookup() while resolving a request's hostname.
+// The ONLY module that reads the control database binding (CONTROL): the vendor registry. Vendor request handlers
+// never see it; src/lib/tenant.js calls lookup() while resolving a hostname. Platform handlers (src/platform.js) get
+// the control database from platformDatabase(), for the admin host only.
 //
 // Lookups are cached per Worker isolate for REGISTRY_TTL_MS (45 s), "unknown vendor" included, so a flood of requests
 // for made-up subdomains doesn't reach the control database. Consequence: suspending, unsuspending or creating a
@@ -31,3 +32,8 @@ export function createRegistry({ ttlMs = REGISTRY_TTL_MS, now = Date.now, maxEnt
 
 // The isolate's registry (src/worker.js uses this one).
 export const registry = createRegistry();
+
+// ---------- the platform admin host ----------
+// The control database, for admin.<BASE_DOMAIN> only (src/lib/tenant.js decides the host). Platform handlers get
+// this and nothing else: never env, never a vendor binding.
+export const platformDatabase = (env) => env.CONTROL;

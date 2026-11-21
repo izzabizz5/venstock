@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { refuseForgedRequest } from "../src/worker.js";
-import { VENDOR_COOKIE, sessionCookie, readCookie } from "../src/lib/auth.js";
+import { VENDOR_COOKIE, PLATFORM_COOKIE, sessionCookie, readCookie } from "../src/lib/auth.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -40,8 +40,13 @@ test("a non-GET request from anywhere but the same origin is refused with 403, e
   assert.equal(refuseForgedRequest(req("POST", { "content-type": "application/json" })), null, "no Sec-Fetch-Site: the JSON check decides");
 });
 
-test("the session cookie is __Host-pos_session: Secure, HttpOnly, SameSite=Strict, Path=/, no Domain", () => {
+test("the session cookies are __Host- names: Secure, HttpOnly, SameSite=Strict, Path=/, no Domain", () => {
   assert.equal(VENDOR_COOKIE, "__Host-pos_session");
+  for (const name of [PLATFORM_COOKIE]) {
+    assert.match(name, /^__Host-pos_/);
+    assert.doesNotMatch(sessionCookie(name, "t", 1), /domain/i);
+  }
+  assert.equal(new Set([VENDOR_COOKIE, PLATFORM_COOKIE]).size, 2);
   const c = sessionCookie(VENDOR_COOKIE, "tok", 60);
   assert.equal(c, "__Host-pos_session=tok; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=60");
   assert.doesNotMatch(c, /domain/i);
@@ -66,7 +71,10 @@ test("source: the check runs first in the Worker, and auth.js never sets a Domai
   const auth = read("src/lib/auth.js");
   assert.doesNotMatch(auth.replace(/\/\/.*$/gm, ""), /domain\s*=/i, "no Domain attribute anywhere in auth.js");
   assert.match(auth, /export const VENDOR_COOKIE = "__Host-pos_session";/);
-  assert.match(auth, /const readToken = \(request\) => readCookie\(request, VENDOR_COOKIE\);/);
+  // Each realm reads only its own cookie name: vendor __Host-pos_session, platform __Host-pos_platform.
+  assert.match(auth, /const readToken = \(request\) => readCookie\(request, R\.cookie\);/);
+  assert.match(auth, /export const VENDOR_REALM = Object\.freeze\(\{ users: "users", sessions: "sessions", fk: "user_id", cookie: VENDOR_COOKIE,/);
+  assert.match(auth, /export const PLATFORM_COOKIE = "__Host-pos_platform";/);
 });
 
 test("front end: the app's only API call sends application/json for every method; sync.js and sw.js only GET the shell", () => {

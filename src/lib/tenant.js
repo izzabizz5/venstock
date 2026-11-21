@@ -5,7 +5,7 @@
 //            -> registry row (control database, via src/lib/control.js)
 //            -> binding DB_T<id>, derived from the numeric id and required to equal tenants.db_binding
 //            -> env[binding], whose vendor_identity row must name this same vendor (checked once per isolate)
-import { registry as defaultRegistry } from "./control.js";
+import { registry as defaultRegistry, platformDatabase } from "./control.js";
 
 // Never a vendor slug. "admin" will serve the platform admin; the rest are kept for the product.
 export const RESERVED_SLUGS = new Set([
@@ -42,8 +42,11 @@ const VERIFIED = new Set();
 //   settingUp  provisioning, or no binding deployed yet: 503 everywhere
 //   suspended  app shell only; the API answers 403
 //   active     { tenant, db }
+//   platform   { db }: the admin.<BASE_DOMAIN> host; db is the control database (never a vendor's)
 export async function resolveVendor(env, hostname, { registry = defaultRegistry, verified = VERIFIED } = {}) {
   const parsed = parseHost(hostname, env.BASE_DOMAIN);
+  // admin.<BASE_DOMAIN>: the Venstock platform admin. Its handlers get the control database and nothing else.
+  if (parsed.kind === "reserved" && parsed.slug === "admin") return { kind: "platform", db: platformDatabase(env) };
   if (parsed.kind !== "tenant") return { kind: "notFound" };
   const row = await registry.lookup(env, parsed.slug);
   if (!row || row.status === "deleted") return { kind: "notFound" };

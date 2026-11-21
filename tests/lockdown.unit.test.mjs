@@ -1,8 +1,10 @@
 // The lockdown, checked in the source: request handlers can only ever reach the one vendor database the hostname
 // resolved to. They never see env, so they can't reach CONTROL or another vendor's binding.
 //   - src/worker.js   reads env.ASSETS and hands env to the resolver; calls handleApi with { request, db, tenant, params }
+//                     and handlePlatformApi with { request, db, params } (db = the control database, admin host only)
 //   - src/lib/tenant.js   the only dynamic env[...] read (the vendor binding), plus env.BASE_DOMAIN
 //   - src/lib/control.js  the only code that touches CONTROL
+//   - src/platform.js     platform handlers: never env, never a vendor binding
 // Comments are stripped first, so these rules apply to code only.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +34,8 @@ const using = (re) => files.filter((f) => re.test(SOURCES[f]));
 const props = (f, re) => [...new Set([...SOURCES[f].matchAll(re)].map((m) => m[1]))].sort();
 
 test("the source files are the ones these rules were written for", () => {
-  assert.deepEqual(files, ["api.js", "lib/auth.js", "lib/control.js", "lib/sales.js", "lib/tenant.js", "lib/validate.js", "worker.js"],
+  assert.deepEqual(files, ["api.js", "lib/auth.js", "lib/control.js", "lib/sales.js", "lib/tenant.js", "lib/validate.js",
+    "platform.js", "worker.js"],
     "a new src file: decide which of the rules below applies to it, then update this list");
 });
 
@@ -46,10 +49,13 @@ test("only the resolver reads a binding dynamically (env[...]), and only the der
   assert.match(SOURCES["lib/tenant.js"], /const binding = vendorBinding\(row\.id\);/);
 });
 
-test("only control.js touches CONTROL; only tenant.js imports control.js", () => {
+test("only control.js touches CONTROL; vendor handler modules import none of control, tenant or platform", () => {
   assert.deepEqual(using(/\bCONTROL\b/), ["lib/control.js"]);
   assert.deepEqual(props("lib/control.js", /\benv\.(\w+)/g), ["CONTROL"]);
   assert.deepEqual(using(/from\s+["'][./]*(lib\/)?control\.js["']/), ["lib/tenant.js"]);
+  for (const f of ["api.js", "lib/auth.js", "lib/sales.js", "lib/validate.js"]) {
+    assert.doesNotMatch(SOURCES[f], /from\s+["'][./]*(lib\/)?(control|tenant)\.js["']|platform\.js/, f);
+  }
 });
 
 test("the Worker reads only env.ASSETS itself; the resolver only env.BASE_DOMAIN", () => {
@@ -57,12 +63,23 @@ test("the Worker reads only env.ASSETS itself; the resolver only env.BASE_DOMAIN
   assert.deepEqual(props("lib/tenant.js", /\benv\.(\w+)/g), ["BASE_DOMAIN"]);
 });
 
-test("handlers get exactly { request, db, tenant, params }, in one place", () => {
+test("vendor handlers get exactly { request, db, tenant, params }", () => {
   const calls = [...SOURCES["worker.js"].matchAll(/handleApi\(([^;]*)\);/g)].map((m) => m[1].replace(/\s+/g, " "));
   assert.deepEqual(calls, ["{ request, db: v.db, tenant: v.tenant, params: { route } }"]);
   assert.match(SOURCES["api.js"], /export async function handleApi\(\{ request, db, tenant, params \}\)/);
   assert.deepEqual(using(/handleApi\(/), ["api.js", "worker.js"]);
 });
+
+test("platform handlers get exactly { request, db, params }, db being the control database, on the admin host only", () => {
+  const calls = [...SOURCES["worker.js"].matchAll(/handlePlatformApi\(([^;]*)\);/g)].map((m) => m[1].replace(/\s+/g, " "));
+  assert.deepEqual(calls, ["{ request, db: v.db, params: { route } }"]);
+  assert.match(SOURCES["worker.js"], /case "platform": \{[\s\S]*?handlePlatformApi\(/, "only inside the platform case");
+  assert.match(SOURCES["lib/tenant.js"], /if \(parsed\.kind === "reserved" && parsed\.slug === "admin"\) return \{ kind: "platform", db: platformDatabase\(env\) \};/);
+  assert.match(SOURCES["lib/control.js"], /export const platformDatabase = \(env\) => env\.CONTROL;/);
+  assert.deepEqual(using(/handlePlatformApi\(/), ["platform.js", "worker.js"]);
+  assert.doesNotMatch(SOURCES["platform.js"], /\benv\b/);
+});
+
 
 test("no code refers to the old shared DB binding", () => {
   assert.deepEqual(using(/\bDB\b(?!_)/), []);

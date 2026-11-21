@@ -4,7 +4,8 @@
 //   node scripts/create-platform-admin.mjs you@example.com            (local: the default)
 //   node scripts/create-platform-admin.mjs you@example.com --remote   (venstock-dev-control; you, never Claude)
 //
-// The platform admin login page comes later in the plan; until then the invite can't be used yet.
+// Open the printed link at admin.<BASE_DOMAIN> (locally http://admin.localhost:8788) to set a password and the
+// authenticator app.
 import { parseArgs, d1Target, die, stmt, EMAIL, newInvite } from "./lib/d1-target.mjs";
 
 const USAGE = "Usage: node scripts/create-platform-admin.mjs you@example.com [--remote]";
@@ -29,4 +30,4 @@ if (existing) {
 
 console.log(`\n${email} is a Venstock platform admin${existing ? " (reset: password, authenticator and sessions cleared)" : ""}.`);
 console.log(`Invite code (valid 7 days): ${invite.pretty}`);
-console.log(`It will be used at ${remote ? "https://admin.<BASE_DOMAIN>" : "http://admin.localhost:8788"}/#invite=${invite.pretty}&email=${encodeURIComponent(email)} once the platform admin login exists.\n`);
+console.log(`Open: ${remote ? "https://admin.<BASE_DOMAIN>" : "http://admin.localhost:8788"}/#invite=${invite.pretty}&email=${encodeURIComponent(email)}\n`);

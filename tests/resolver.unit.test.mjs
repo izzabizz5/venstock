@@ -92,7 +92,7 @@ test("resolver: active vendor gets exactly its own binding", async () => {
 test("resolver: unknown, reserved, deleted and malformed hosts are notFound, without touching vendor databases", async () => {
   const DB_T1 = identityDb(1, "demo");
   const { resolve, control } = setup([row(1, "demo"), row(2, "gone", "deleted"), row(3, "www")], { DB_T1 });
-  for (const h of ["nosuch.localhost", "www.localhost", "admin.localhost", "gone.localhost", "localhost", "x.demo.localhost", "demo.example.com", "127.0.0.1"]) {
+  for (const h of ["nosuch.localhost", "www.localhost", "gone.localhost", "localhost", "x.demo.localhost", "demo.example.com", "127.0.0.1"]) {
     assert.deepEqual(await resolve(h), { kind: "notFound" }, h);
   }
   assert.equal(DB_T1.calls.length, 0);
@@ -181,4 +181,17 @@ test("resolver: hostnames that can't be a vendor slug never query the control da
     assert.deepEqual(await resolve(h), { kind: "notFound" }, h);
   }
   assert.deepEqual(control.calls, []);
+});
+
+test("resolver: admin.<BASE_DOMAIN> is the platform host and gets the control database, never a vendor's", async () => {
+  const DB_T1 = identityDb(1, "demo");
+  const { resolve, env, control } = setup([row(1, "demo"), row(2, "admin")], { DB_T1 });
+  const r = await resolve("admin.localhost");
+  assert.equal(r.kind, "platform");
+  assert.equal(r.db, env.CONTROL);
+  assert.equal(r.tenant, undefined);
+  assert.deepEqual(control.calls, [], "no registry lookup: even a registry row named admin is never a vendor");
+  assert.equal(DB_T1.calls.length, 0);
+  assert.equal((await resolve("ADMIN.localhost.")).kind, "platform");
+  assert.deepEqual(await resolve("admin.demo.localhost"), { kind: "notFound" });
 });

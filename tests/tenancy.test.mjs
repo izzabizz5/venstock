@@ -29,7 +29,7 @@ const API = ["/api", "/api/auth/me", "/api/items"];
 
 for (const [label, host] of [
   ["unknown vendor", "nosuch.localhost"],
-  ["reserved slug (admin)", "admin.localhost"],
+  ["reserved slug (status)", "status.localhost"],
   ["reserved slug with a registry row (www)", "www.localhost"],
   ["deleted vendor", "gone.localhost"],
   ["two levels deep", "x.demo.localhost"],
@@ -50,7 +50,7 @@ for (const [label, host] of [
 
 test("unknown, reserved and deleted hosts give identical responses (nothing reveals which slugs exist)", async () => {
   for (const p of ["/", "/api/auth/me"]) {
-    const [a, ...others] = await Promise.all(["nosuch", "www", "admin", "gone"].map((s) => get(`${s}.localhost`, p)));
+    const [a, ...others] = await Promise.all(["nosuch", "www", "status", "gone"].map((s) => get(`${s}.localhost`, p)));
     for (const o of others) {
       assert.equal(o.text, a.text);
       assert.equal(o.headers["content-type"], a.headers["content-type"]);

@@ -16,6 +16,9 @@ import { renderConfig, LOCAL_CONTROL, localVendorDb, vendorBinding } from "../sc
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Known test accounts. Secrets are fake and only ever used against a temporary local database.
+// A Venstock platform admin (control database), for admin.localhost.
+export const PLATFORM_ADMIN = { email: "staff@venstock.test", password: "test-password-platform", totpSecret: "KVKFKRCPNZQUYMLX", isAdmin: true };
+
 export const USERS = {
   admin: { email: "admin@example.test", password: "test-password-admin", totpSecret: "JBSWY3DPEHPK3PXP", isAdmin: true },
   staff: { email: "staff@example.test", password: "test-password-staff", totpSecret: "KRSXG5CTMVRXEZLU", isAdmin: false },
@@ -85,7 +88,8 @@ const latestVendorMigration = () => readdirSync(join(ROOT, "migrations", "vendor
 //   databaseOf: "<slug>"     this vendor's binding points at another vendor's database
 //   registryBinding: "DB_T1" tenants.db_binding tampered (the derived name is still DB_T<n>)
 // The old single-vendor form startServer({ users, seedSql }) is one vendor, "demo".
-export async function startServer({ users = [USERS.admin], seedSql = "", vendors } = {}) {
+// platformAdmins: Venstock staff seeded into the control database (log in at admin.localhost).
+export async function startServer({ users = [USERS.admin], seedSql = "", vendors, platformAdmins = [] } = {}) {
   vendors = (vendors ?? [{ slug: "demo", users, seedSql }]).map((v, i) => ({
     users: [USERS.admin], seedSql: "", status: "active", name: v.slug, bind: true, ...v, id: i + 1,
   }));
@@ -101,6 +105,10 @@ export async function startServer({ users = [USERS.admin], seedSql = "", vendors
     (id, slug, name, status, db_binding, db_name, db_id, schema_version, created_at, status_changed_at) VALUES
     (${v.id}, ${sqlString(v.slug)}, ${sqlString(v.name)}, ${sqlString(v.status)}, ${sqlString(v.registryBinding ?? vendorBinding(v.id))},
      ${sqlString(v.db_name)}, ${sqlString(v.db_id)}, ${sqlString(latest)}, ${sqlString(now)}, ${sqlString(now)});`).join("\n"));
+  if (platformAdmins.length) {
+    seed("CONTROL", platformAdmins.map((u) => `INSERT INTO platform_admins (email, password_hash, totp_secret, totp_enabled, created_at)
+      VALUES (${sqlString(u.email)}, ${sqlString(hashPassword(u.password))}, ${sqlString(u.totpSecret)}, 1, ${sqlString(now)});`).join("\n"));
+  }
   for (const v of rows) {
     seed(vendorBinding(v.id), vendorSchemaSql() + "\n" +
       `INSERT INTO vendor_identity (singleton, tenant_id, slug, created_at) VALUES (1, ${v.id}, ${sqlString(v.slug)}, ${sqlString(now)});\n` +
