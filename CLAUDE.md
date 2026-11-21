@@ -12,9 +12,9 @@ where **each vendor has its own D1 database**:
 - each vendor's database (binding `DB_T<id>`) holds that vendor's items, shows, sales, settings, users and sessions;
 - a request's hostname `<slug>.<BASE_DOMAIN>` → registry → `DB_T<id>` → that one database. Nothing else.
 
-**In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist.
-API handlers still take a stand-in `env` holding only the resolved vendor's database (`{ DB }`); later steps change
-them to `{ db, tenant }`. Old names (`show-pos`, `show-pos-db`, "show pos") still appear in places.
+**In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist, and
+`handleApi` receives only `{ request, db, tenant, params }`. Auth and items have cross-vendor tests; settings,
+shows, sales and the users admin get theirs next. Old names (`show-pos`, `show-pos-db`, "show pos") still appear.
 
 **Registry cache:** the Worker caches each hostname's registry lookup in the isolate for 45 seconds
 (`src/lib/control.js`), unknown vendors included. A suspension, unsuspension or new vendor takes effect within

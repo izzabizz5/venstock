@@ -159,13 +159,14 @@ export async function startServer({ users = [USERS.admin], seedSql = "", vendors
 }
 
 // A 6-digit code is valid for the previous, current and next 30-second step, and each step can be used once
-// per user, so successive logins by the same user take successive steps.
+// per user, so successive logins by the same user take successive steps. Keyed by email AND secret: the same email
+// can be a different user (own secret, own database) at another vendor.
 const lastStep = new Map();
 async function nextCode(user) {
   for (;;) {
     const now = Math.floor(Date.now() / 30000);
-    const step = Math.max(now - 1, (lastStep.get(user.email) ?? 0) + 1);
-    if (step <= now + 1) { lastStep.set(user.email, step); return totpCode(user.totpSecret, step); }
+    const step = Math.max(now - 1, (lastStep.get(`${user.email}|${user.totpSecret}`) ?? 0) + 1);
+    if (step <= now + 1) { lastStep.set(`${user.email}|${user.totpSecret}`, step); return totpCode(user.totpSecret, step); }
     await new Promise((r) => setTimeout(r, 1000));
   }
 }

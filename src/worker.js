@@ -60,8 +60,7 @@ export default {
     } catch {
       return Response.json({ error: "Not found" }, { status: 404 });
     }
-    // INTERIM: handleApi still reads env.DB, so it gets a stand-in env holding ONLY this vendor's database. The real
-    // env (CONTROL, other vendors' bindings) never reaches a handler. Steps 7-8 change handlers to take { db, tenant }.
-    return handleApi({ request, env: { DB: v.db }, params: { route }, tenant: v.tenant });
+    // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.
+    return handleApi({ request, db: v.db, tenant: v.tenant, params: { route } });
   },
 };

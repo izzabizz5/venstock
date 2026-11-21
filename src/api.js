@@ -30,8 +30,9 @@ const DEFAULT_SETTINGS = {
 };
 
 // Called by src/worker.js for every /api request; route = the path segments after /api.
-export async function handleApi({ request, env, params }) {
-  const db = env.DB;
+// db: the one vendor database the hostname resolved to; tenant: that vendor's registry row ({ id, slug, name,
+// status }). Handlers never receive env, so they can't reach CONTROL or another vendor's binding.
+export async function handleApi({ request, db, tenant, params }) {
   const url = new URL(request.url);
   const [a, b, c] = params.route || [];
   const m = request.method;
@@ -163,10 +164,11 @@ export async function handleApi({ request, env, params }) {
       if (b && m === "PUT") {
         const name = str(body.name);
         if (!name) return fail("Name required");
-        await db
+        const r = await db
           .prepare("UPDATE items SET name=?, category=?, sku=?, price_cents=?, stock=?, active=? WHERE id=?")
           .bind(name, str(body.category), str(body.sku), int(body.price_cents), int(body.stock), body.active ? 1 : 0, int(b))
           .run();
+        if (!r.meta.changes) return fail("Not found", 404); // no such item in this vendor's database
         return json({ ok: true });
       }
     }
