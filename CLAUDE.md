@@ -13,8 +13,8 @@ where **each vendor has its own D1 database**:
 - a request's hostname `<slug>.<BASE_DOMAIN>` → registry → `DB_T<id>` → that one database. Nothing else.
 
 **In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist, and
-`handleApi` receives only `{ request, db, tenant, params }`. Auth and items have cross-vendor tests; settings,
-shows, sales and the users admin get theirs next. Old names (`show-pos`, `show-pos-db`, "show pos") still appear.
+`handleApi` receives only `{ request, db, tenant, params }`, and every API area (auth, items, settings, shows,
+sales, users) has cross-vendor tests. Old names (`show-pos`, `show-pos-db`, "show pos") still appear.
 
 **Registry cache:** the Worker caches each hostname's registry lookup in the isolate for 45 seconds
 (`src/lib/control.js`), unknown vendors included. A suspension, unsuspension or new vendor takes effect within
@@ -116,7 +116,9 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - `src/lib/tenant.js`: hostname → slug → registry row → `DB_T<id>` (derived from the id, must equal
   `tenants.db_binding`) → `vendor_identity` check (once per isolate). The only code that reads `env[binding]`.
 - `src/lib/control.js`: the only code that reads `CONTROL` (registry lookups, cached 45 s).
-- `src/lib/validate.js`: pure request validation (restock).
+- `src/lib/validate.js`: pure request validation (restock, sale uploads).
+- `src/lib/sales.js`: records an uploaded sale: idempotent per `client_id`, priced from the vendor's own items
+  (current price; the device's discount is capped at the subtotal), unknown items or show = 422, one atomic batch.
 - `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `create-tenant.mjs`, `add-admin.mjs`,
   `create-platform-admin.mjs`, `build-config.mjs`, `release.mjs`; `scripts/lib/` holds the local/remote guard
   (`d1-target.mjs`), the executors (`executor.mjs`, `local-d1.mjs`), the generated-config writer and the checksum

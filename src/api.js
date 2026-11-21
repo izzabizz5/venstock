@@ -2,6 +2,7 @@
 // plus /api/auth (log in / sign up) and /api/users (admins). Everything except /api/auth needs a full login.
 import { authRoutes, userRoutes, currentSession } from "./lib/auth.js";
 import { validateRestock } from "./lib/validate.js";
+import { recordSale } from "./lib/sales.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -235,10 +236,11 @@ export async function handleApi({ request, db, tenant, params }) {
       if (id && m === "PUT") {
         const f = fields();
         if (f.error) return fail(f.error);
-        await db
+        const r = await db
           .prepare("UPDATE upcoming_shows SET name=?, show_date=?, start_time=?, end_time=? WHERE id=?")
           .bind(...f.values, id)
           .run();
+        if (!r.meta.changes) return fail("That show was already started or removed", 404);
         return json({ ok: true });
       }
       if (id && m === "DELETE") {
@@ -342,53 +344,10 @@ export async function handleApi({ request, db, tenant, params }) {
           .all();
         return json(results);
       }
+      // Upload of one sale rung up on a device: src/lib/sales.js.
       if (!b && m === "POST") {
-        const { client_id, show_id, payment_method, items, created_at } = body;
-        if (!client_id || !["cash", "venmo", "zelle"].includes(payment_method)) return fail("Bad sale");
-        if (!Array.isArray(items) || !items.length) return fail("No items");
-        const dup = await db.prepare("SELECT id FROM sales WHERE client_id=?").bind(client_id).first();
-        if (dup) return json({ id: dup.id, duplicate: true }); // safe to retry
-
-        const lines = items.map((i) => ({
-          item_id: int(i.item_id),
-          name: str(i.name),
-          qty: Math.max(1, int(i.qty, 1)),
-          price_cents: Math.max(0, int(i.price_cents)),
-        }));
-        const subtotal = lines.reduce((t, l) => t + l.qty * l.price_cents, 0);
-        const discount = Math.min(subtotal, Math.max(0, int(body.discount_cents)));
-        const stmts = [
-          db
-            .prepare(
-              `INSERT INTO sales (client_id, show_id, payment_method, total_cents, created_at,
-                                  register, notes, subtotal_cents, discount_cents, discount_label)
-               VALUES (?,?,?,?,?,?,?,?,?,?)`
-            )
-            .bind(
-              client_id,
-              show_id ? int(show_id) : null,
-              payment_method,
-              subtotal - discount,
-              created_at || new Date().toISOString(),
-              str(body.register, 50),
-              str(body.notes, 1000),
-              subtotal,
-              discount,
-              discount ? str(body.discount_label, 100) : ""
-            ),
-        ];
-        for (const l of lines) {
-          stmts.push(
-            db
-              .prepare(
-                "INSERT INTO sale_items (sale_id, item_id, name, qty, price_cents) VALUES ((SELECT id FROM sales WHERE client_id=?),?,?,?,?)"
-              )
-              .bind(client_id, l.item_id, l.name, l.qty, l.price_cents),
-            db.prepare("UPDATE items SET stock = stock - ? WHERE id=?").bind(l.qty, l.item_id)
-          );
-        }
-        await db.batch(stmts);
-        return json({ ok: true });
+        const r = await recordSale(db, body);
+        return json(r.body, r.status);
       }
       if (b && c === "void" && m === "POST") {
         const sale = await db.prepare("SELECT * FROM sales WHERE id=?").bind(int(b)).first();
