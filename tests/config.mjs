@@ -1,12 +1,8 @@
 // The one setting the test harness has: how to start the app locally.
-// Step 2 (Worker conversion) changes only this file; the tests themselves stay the same.
+// The tests themselves don't change when this does.
 // inspectorPort: each test server needs its own, or servers started in parallel clash.
-export function serverCommand({ port, inspectorPort, persistTo }) {
-  return ["npx", ["--no-install", "wrangler", "dev",
+// config: the generated wrangler config (CONTROL + one DB_T<id> per vendor) the harness writes for this server.
+export function serverCommand({ port, inspectorPort, persistTo, config }) {
+  return ["npx", ["--no-install", "wrangler", "dev", "-c", config,
     "--ip", "127.0.0.1", "--port", String(port), "--inspector-port", String(inspectorPort), "--persist-to", persistTo]];
-}
-
-// How the local database is seeded before the server starts (always --local).
-export function d1ExecuteCommand({ persistTo, file }) {
-  return ["npx", ["--no-install", "wrangler", "d1", "execute", "DB", "--local", "--persist-to", persistTo, `--file=${file}`]];
 }

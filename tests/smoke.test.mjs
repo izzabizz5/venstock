@@ -1,12 +1,12 @@
 // Baseline smoke test: today's single-vendor behaviour, end to end, through the real HTTP API.
-// Later steps must keep this passing unchanged (only the host it talks to changes, in step 4).
+// Later steps must keep this passing unchanged. It talks to the "demo" vendor at demo.localhost.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { startServer, USERS } from "./harness.mjs";
 
 let server, admin, anon;
-const HOST = "localhost";
+const HOST = "demo.localhost";
 
 before(async () => {
   server = await startServer({ users: [USERS.admin, USERS.staff] });

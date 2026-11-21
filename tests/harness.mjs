@@ -1,6 +1,7 @@
-// Test harness: starts the app on a throwaway local database, seeds users, and gives tests an HTTP client
-// that keeps cookies and can log in with password + 6-digit code. No dependencies; local only.
-import { spawn, spawnSync } from "node:child_process";
+// Test harness: starts the app on throwaway local databases (a control database plus one database per vendor), seeds
+// users, and gives tests an HTTP client that keeps cookies and can log in with password + 6-digit code.
+// No dependencies; local only.
+import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -8,7 +9,9 @@ import { fileURLToPath } from "node:url";
 import { createServer, request as httpRequest } from "node:http";
 import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { totpCode } from "../src/lib/auth.js";
-import { serverCommand, d1ExecuteCommand } from "./config.mjs";
+import { serverCommand } from "./config.mjs";
+import { localSql } from "./local-sql.mjs";
+import { renderConfig, LOCAL_CONTROL, localVendorDb, vendorBinding } from "../scripts/lib/wrangler-config.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -68,38 +71,68 @@ export function rawRequest(port, { method = "GET", path = "/", host = "localhost
   });
 }
 
-function runLocal(cmd, args) {
-  assertLocal(args);
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8" });
-  if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")} failed:\n${r.stdout}\n${r.stderr}`);
-  return r.stdout;
-}
+// Every file in migrations/<kind>/, in order: the same SQL the migration runner applies.
+const schemaSql = (kind) => readdirSync(join(ROOT, "migrations", kind)).filter((f) => f.endsWith(".sql")).sort()
+  .map((f) => readFileSync(join(ROOT, "migrations", kind, f), "utf8")).join("\n");
+export const vendorSchemaSql = () => schemaSql("vendor");
+const latestVendorMigration = () => readdirSync(join(ROOT, "migrations", "vendor")).filter((f) => f.endsWith(".sql")).sort().at(-1);
 
-// The vendor schema: every file in migrations/vendor/, in order (schema.sql is gone; migrations are the source).
-export const vendorSchemaSql = () => readdirSync(join(ROOT, "migrations", "vendor")).filter((f) => f.endsWith(".sql")).sort()
-  .map((f) => readFileSync(join(ROOT, "migrations", "vendor", f), "utf8")).join("\n");
-
-// Starts the app on a fresh local database (the vendor schema), then `users`, then `seedSql`.
-export async function startServer({ users = [USERS.admin], seedSql = "" } = {}) {
+// Starts the app with a control database and one database per vendor. Vendor n (1-based, in list order) is tenant n,
+// binding DB_T<n>, host <slug>.localhost. Each vendor: { slug, name?, status? ("active"), users? ([admin]), seedSql? }.
+// Broken setups, on purpose, for resolver tests:
+//   bind: false              the registry has the database but the server config has no binding for it
+//   databaseOf: "<slug>"     this vendor's binding points at another vendor's database
+//   registryBinding: "DB_T1" tenants.db_binding tampered (the derived name is still DB_T<n>)
+// The old single-vendor form startServer({ users, seedSql }) is one vendor, "demo".
+export async function startServer({ users = [USERS.admin], seedSql = "", vendors } = {}) {
+  vendors = (vendors ?? [{ slug: "demo", users, seedSql }]).map((v, i) => ({
+    users: [USERS.admin], seedSql: "", status: "active", name: v.slug, bind: true, ...v, id: i + 1,
+  }));
   const persistTo = mkdtempSync(join(tmpdir(), "venstock-test-"));
-  const seedFile = join(persistTo, "seed.sql");
-  writeFileSync(seedFile, vendorSchemaSql() + "\n" + users.map(userInsertSql).join("\n") + "\n" + seedSql);
-  runLocal(...d1ExecuteCommand({ persistTo, file: seedFile }));
+  const now = new Date().toISOString();
+  const rows = vendors.map((v) => ({ ...v, db_name: localVendorDb(v.id).name, db_id: localVendorDb(v.id).id }));
+
+  // Seeding writes the local database files directly, with the true wiring (every vendor in its own database).
+  const sql = localSql(persistTo);
+  const seed = (binding, text) => sql(binding, text, false);
+  const latest = latestVendorMigration();
+  seed("CONTROL", schemaSql("control") + "\n" + rows.map((v) => `INSERT INTO tenants
+    (id, slug, name, status, db_binding, db_name, db_id, schema_version, created_at, status_changed_at) VALUES
+    (${v.id}, ${sqlString(v.slug)}, ${sqlString(v.name)}, ${sqlString(v.status)}, ${sqlString(v.registryBinding ?? vendorBinding(v.id))},
+     ${sqlString(v.db_name)}, ${sqlString(v.db_id)}, ${sqlString(latest)}, ${sqlString(now)}, ${sqlString(now)});`).join("\n"));
+  for (const v of rows) {
+    seed(vendorBinding(v.id), vendorSchemaSql() + "\n" +
+      `INSERT INTO vendor_identity (singleton, tenant_id, slug, created_at) VALUES (1, ${v.id}, ${sqlString(v.slug)}, ${sqlString(now)});\n` +
+      v.users.map(userInsertSql).join("\n") + "\n" + v.seedSql);
+  }
+
+  // The server's config: what the bindings would look like in a deploy, including any deliberate miswiring.
+  const serverRows = rows.map((v) => ({
+    ...v,
+    db_id: !v.bind ? null : v.databaseOf ? rows.find((o) => o.slug === v.databaseOf).db_id : v.db_id,
+  }));
+  const config = join(persistTo, "wrangler.toml");
+  let toml = renderConfig({ root: ROOT, outDir: persistTo, control: LOCAL_CONTROL, vendors: serverRows });
+  // INTERIM (until the Worker resolves vendors from the hostname): the Worker still reads env.DB, so DB is the first
+  // vendor's database. Removed with the resolver.
+  toml += `\n[[d1_databases]]\nbinding = "DB"\ndatabase_name = "${rows[0].db_name}"\ndatabase_id = "${rows[0].db_id}"\n`;
+  writeFileSync(config, toml);
 
   const port = await freePort();
   const inspectorPort = await freePort();
-  const [cmd, args] = serverCommand({ port, inspectorPort, persistTo });
+  const [cmd, args] = serverCommand({ port, inspectorPort, persistTo, config });
   assertLocal(args);
   let log = "";
   const child = spawn(cmd, args, { cwd: ROOT, detached: true, stdio: ["ignore", "pipe", "pipe"] });
   child.stdout.on("data", (c) => (log += c));
   child.stderr.on("data", (c) => (log += c));
 
+  // Ready once wrangler answers at all (unknown or broken hosts legitimately answer 404 or 503).
   const deadline = Date.now() + 90_000;
   for (;;) {
     try {
-      const r = await rawRequest(port, { path: "/" });
-      if (r.status === 200) break;
+      await rawRequest(port, { path: "/", host: `${rows[0].slug}.localhost` });
+      break;
     } catch {}
     if (child.exitCode !== null || Date.now() > deadline) {
       try { process.kill(-child.pid, "SIGTERM"); } catch {}
@@ -111,8 +144,15 @@ export async function startServer({ users = [USERS.admin], seedSql = "" } = {}) 
   return {
     port,
     persistTo,
+    configText: () => readFileSync(config, "utf8"),
+    vendors: rows.map(({ id, slug, status }) => ({ id, slug, status, binding: vendorBinding(id), host: `${slug}.localhost` })),
     log: () => log,
-    client: (host = "localhost") => new Client(port, host),
+    client: (host = `${rows[0].slug}.localhost`) => new Client(port, host),
+    // Direct SQL on one database for assertions and setup (true wiring, whatever the server's config says).
+    // SELECTs return rows; anything else runs and returns [].
+    query(binding, text) {
+      return /^\s*(select|with)\b/i.test(text) ? sql(binding, text) : (sql(binding, text, false), []);
+    },
     async stop() {
       try { process.kill(-child.pid, "SIGTERM"); } catch {}
       await new Promise((r) => (child.exitCode !== null ? r() : child.once("exit", r)));
