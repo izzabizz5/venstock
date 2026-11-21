@@ -87,7 +87,10 @@ npx wrangler d1 execute DB --local --file=migrations/NNN_name.sql
 Never edit a migration that already exists.
 
 ### Tests
-There are no automated tests yet.
+```bash
+node --test 'tests/**/*.test.mjs'
+```
+No dependencies to install. Each test file starts the app on its own temporary local database and removes it afterwards. Checks that need a real browser are listed in `tests/MANUAL.md`.
 
 ### Deploying
 Deployment for Venstock isn't set up yet. `wrangler.toml` has placeholder database values. The only remote

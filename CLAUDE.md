@@ -29,7 +29,13 @@ npx wrangler d1 execute DB --local --file=migrations/NNN_name.sql
 ```
 `schema.sql` is the full fresh-install schema. It must stay in sync with the migrations.
 
-Tests: **there are no tests yet** and no test runner is configured.
+Tests (no dependencies; each test file starts the app on its own throwaway local database):
+```bash
+node --test 'tests/**/*.test.mjs'
+```
+- `tests/config.mjs` is the only place that says how the app is started; the tests don't change when it does.
+- `tests/harness.mjs` seeds users with known passwords and authenticator secrets and logs in with real 6-digit codes.
+- Checks that need a real browser are listed in `tests/MANUAL.md`.
 
 Deploy: **not set up for Venstock. Don't deploy unless explicitly asked.** The original app's deploy command
 (`npx wrangler pages deploy public --project-name=show-pos`) and any `--remote` command against `show-pos-db`
