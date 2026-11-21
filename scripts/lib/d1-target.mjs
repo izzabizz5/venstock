@@ -5,14 +5,17 @@
 //   - always print which databases are about to be touched.
 // Tests point local runs at throwaway folders with VENSTOCK_PERSIST_TO and VENSTOCK_GENERATED_DIR; both are ignored
 // for remote runs.
-import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createHash, randomInt } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderConfig, readBaseToml, LOCAL_CONTROL, vendorBinding } from "./wrangler-config.mjs";
-import { localRun, localQuery } from "./local-d1.mjs";
+import { stmt, isStmt, localExecutor, remoteExecutor } from "./executor.mjs";
+export { stmt };
+
+// Set only by tests, from inside the process: see d1Target().
+export const TEST_EXECUTOR = Symbol.for("venstock.test.executor");
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const ALLOWED_REMOTE = /^venstock-dev-(control|t\d+)$/;
@@ -74,13 +77,23 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
   let names = { CONTROL: control.name };
   let ids = { CONTROL: control.id };
 
-  const where = remote ? ["--remote"] : ["--local", "--persist-to", persistTo];
+  // The executor does the I/O; every check stays here, before it. The remote executor is built only when `remote`
+  // is true, and `remote` only ever comes from an explicit --remote (parseArgs). A test may substitute both executors
+  // with a recording one by setting TEST_EXECUTOR from inside the process (node --import); nothing outside the
+  // process (no env var, no flag) can.
+  const fake = globalThis[TEST_EXECUTOR];
+  const exec = fake ? fake({ mode: remote ? "remote" : "local", persistTo, root: ROOT })
+    : remote ? remoteExecutor() : localExecutor({ persistTo });
+  if (exec.mode !== (remote ? "remote" : "local")) throw new Error("executor mode doesn't match the target");
   const checkBinding = (binding) => {
     if (!(binding in names)) throw new Error(`binding ${binding} is not in the generated config`);
     if (remote && !ALLOWED_REMOTE.test(names[binding])) die(`Refusing --remote: ${binding} is ${names[binding]}, which is not a venstock-dev-* database.`);
+    return { binding, databaseId: ids[binding], databaseName: names[binding], configPath, root: ROOT };
   };
-  const wrangler = (args, { capture = true } = {}) =>
-    spawnSync("npx", ["wrangler", ...args], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", capture ? "pipe" : "inherit", "pipe"] });
+  const asStmt = (s) => {
+    if (!isStmt(s)) throw new Error("scripts pass statements built with stmt(sql, ...params), never raw SQL strings");
+    return s;
+  };
 
   const t = {
     remote, generatedPath, persistTo, control,
@@ -101,61 +114,46 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
     // Reads every non-deleted vendor from the registry and writes the shared config for all of them.
     refreshConfig() {
       if (!t.tableExists("CONTROL", "tenants")) return null;
-      const vendors = t.query("CONTROL", `SELECT id, slug, name, status, db_name, db_id, schema_version, owner_email, created_at, status_changed_at
-        FROM tenants WHERE status != 'deleted' ORDER BY id`);
+      const vendors = t.query("CONTROL", stmt(`SELECT id, slug, name, status, db_name, db_id, schema_version, owner_email, created_at, status_changed_at
+        FROM tenants WHERE status != 'deleted' ORDER BY id`));
       t.writeConfig(vendors);
       return vendors;
     },
-    // Runs SQL on one binding; throws with wrangler's error text on failure.
-    run(binding, sql) {
-      checkBinding(binding);
-      if (!remote) {
-        try { return localRun(persistTo, ids[binding], sql); }
-        catch (e) { throw new Error(`d1 execute on ${binding} failed:\n${e.message}`); }
-      }
-      const r = wrangler(["d1", "execute", binding, ...where, "-c", configPath, "--command", sql]);
-      if (r.status !== 0) throw new Error(`d1 execute on ${binding} failed:\n${(r.stderr || r.stdout || "").trim()}`);
+    // Runs one or more statements on one binding, all or nothing; throws with the database's error text.
+    run(binding, ...stmts) {
+      const ctx = checkBinding(binding);
+      if (!stmts.length) throw new Error("run: no statements");
+      stmts.forEach(asStmt);
+      try { exec.run(stmts, ctx); }
+      catch (e) { throw new Error(`d1 execute on ${binding} failed:\n${e.message}`); }
     },
     // One SELECT on one binding; returns its rows.
-    query(binding, sql) {
-      checkBinding(binding);
-      if (!remote) {
-        try { return localQuery(persistTo, ids[binding], sql); }
-        catch (e) { throw new Error(`d1 query on ${binding} failed:\n${e.message}`); }
-      }
-      const r = wrangler(["d1", "execute", binding, ...where, "-c", configPath, "--command", sql, "--json"]);
-      if (r.status !== 0) throw new Error(`d1 query on ${binding} failed:\n${(r.stderr || r.stdout || "").trim()}`);
-      return JSON.parse(r.stdout)[0].results;
+    query(binding, s) {
+      const ctx = checkBinding(binding);
+      try { return exec.query(asStmt(s), ctx); }
+      catch (e) { throw new Error(`d1 query on ${binding} failed:\n${e.message}`); }
     },
     tableExists(binding, table) {
-      return t.query(binding, `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ${sqlString(table)}`).length > 0;
+      return t.query(binding, stmt("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", table)).length > 0;
     },
     // Names of migrations wrangler has recorded as applied on this binding.
     appliedMigrations(binding) {
-      return t.tableExists(binding, "d1_migrations") ? t.query(binding, "SELECT name FROM d1_migrations ORDER BY id").map((r) => r.name) : [];
+      return t.tableExists(binding, "d1_migrations") ? t.query(binding, stmt("SELECT name FROM d1_migrations ORDER BY id")).map((r) => r.name) : [];
     },
     // wrangler d1 migrations apply: each file is rolled back on error, and later files are not attempted.
     applyMigrations(binding) {
-      checkBinding(binding);
-      const r = wrangler(["d1", "migrations", "apply", binding, ...where, "-c", configPath, "--force"]);
-      return { ok: r.status === 0, output: `${r.stdout || ""}${r.stderr || ""}`.trim() };
+      return exec.applyMigrations(checkBinding(binding));
     },
     // Remote only: creates a database and returns its id. Name must be venstock-dev-t<id>.
     createDatabase(name) {
       if (!remote) throw new Error("createDatabase is remote only (local databases appear on first use)");
       if (!ALLOWED_REMOTE.test(name) || name === "venstock-dev-control") die(`Refusing to create ${name}: only venstock-dev-t<id>.`);
-      const r = wrangler(["d1", "create", name]);
-      const out = `${r.stdout || ""}${r.stderr || ""}`;
-      const id = out.match(/"?database_id"?\s*[=:]\s*"([0-9a-f-]{36})"/i)?.[1];
-      if (r.status !== 0 || !id) throw new Error(`wrangler d1 create ${name} failed or printed no database_id:\n${out.trim()}`);
-      return id;
+      return exec.createDatabase(name, { root: ROOT });
     },
   };
   return t;
 }
 
-// SQL string literal (the wrangler CLI can't bind parameters, so every value goes through this).
-export const sqlString = (s) => `'${String(s).replace(/'/g, "''")}'`;
 
 export const EMAIL = /^[^\s@'"]+@[^\s@'"]+\.[^\s@'"]+$/;
 

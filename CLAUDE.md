@@ -54,6 +54,10 @@ node scripts/migrations-manifest.mjs --update # record checksums of NEW migratio
 Scripts in `scripts/` go through `scripts/lib/d1-target.mjs`: local by default (state in `.wrangler/state`, generated
 config in `.wrangler-generated/local/`); remote only with an explicit `--remote`, and then only for databases named
 `venstock-dev-control` or `venstock-dev-t<id>`. They print which databases they are about to touch.
+Scripts build every statement once with `stmt(sql, ...params)` (`?` placeholders; never put values into SQL text)
+and hand it to `d1-target`, which checks the binding and passes it to the local executor (node:sqlite, parameters
+bound) or, only for `--remote`, the remote one (`wrangler d1 execute`; parameters rendered as literals there and
+only there). `tests/executor-parity.test.mjs` proves both modes send identical statements in the same order.
 
 Tests (no dependencies; every test uses its own throwaway local databases):
 ```bash
@@ -115,7 +119,8 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - `src/lib/validate.js`: pure request validation (restock).
 - `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `create-tenant.mjs`, `add-admin.mjs`,
   `create-platform-admin.mjs`, `build-config.mjs`, `release.mjs`; `scripts/lib/` holds the local/remote guard
-  (`d1-target.mjs`), the generated-config writer and the checksum manifest code.
+  (`d1-target.mjs`), the executors (`executor.mjs`, `local-d1.mjs`), the generated-config writer and the checksum
+  manifest code.
 - `tests/`: `node --test` harness and tests; `tests/MANUAL.md` for browser-only checks.
 - `docs/before-first-vendor.md`: what must exist before any paying vendor is onboarded (including drills you run).
 - `.claude/`: Claude Code guardrails (deny rules and a hook that block remote and deploy commands).

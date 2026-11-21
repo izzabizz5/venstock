@@ -5,7 +5,7 @@
 //   node scripts/create-platform-admin.mjs you@example.com --remote   (venstock-dev-control; you, never Claude)
 //
 // The platform admin login page comes later in the plan; until then the invite can't be used yet.
-import { parseArgs, d1Target, die, sqlString, EMAIL, newInvite } from "./lib/d1-target.mjs";
+import { parseArgs, d1Target, die, stmt, EMAIL, newInvite } from "./lib/d1-target.mjs";
 
 const USAGE = "Usage: node scripts/create-platform-admin.mjs you@example.com [--remote]";
 const { positional, remote } = parseArgs(process.argv.slice(2), { usage: USAGE });
@@ -16,14 +16,16 @@ if (!EMAIL.test(email)) die(`Bad email address "${email}".\n${USAGE}`);
 const t = d1Target({ remote });
 if (!t.tableExists("CONTROL", "platform_admins")) die(`The control database isn't set up: run node scripts/migrate.mjs --control${remote ? " --remote" : ""} first.`);
 const invite = newInvite();
-const [existing] = t.query("CONTROL", `SELECT id FROM platform_admins WHERE email = ${sqlString(email)}`);
-t.run("CONTROL", existing
-  ? `UPDATE platform_admins SET password_hash = NULL, totp_secret = NULL, totp_enabled = 0, totp_last_step = 0,
-       failed_logins = 0, locked_until = 0, invite_hash = ${sqlString(invite.hash)}, invite_expires = ${invite.expires}
-     WHERE id = ${existing.id};
-     DELETE FROM platform_sessions WHERE admin_id = ${existing.id};`
-  : `INSERT INTO platform_admins (email, invite_hash, invite_expires, created_at)
-     VALUES (${sqlString(email)}, ${sqlString(invite.hash)}, ${invite.expires}, ${sqlString(new Date().toISOString())})`);
+const [existing] = t.query("CONTROL", stmt("SELECT id FROM platform_admins WHERE email = ?", email));
+if (existing) {
+  t.run("CONTROL",
+    stmt(`UPDATE platform_admins SET password_hash = NULL, totp_secret = NULL, totp_enabled = 0, totp_last_step = 0,
+      failed_logins = 0, locked_until = 0, invite_hash = ?, invite_expires = ? WHERE id = ?`, invite.hash, invite.expires, existing.id),
+    stmt("DELETE FROM platform_sessions WHERE admin_id = ?", existing.id));
+} else {
+  t.run("CONTROL", stmt("INSERT INTO platform_admins (email, invite_hash, invite_expires, created_at) VALUES (?, ?, ?, ?)",
+    email, invite.hash, invite.expires, new Date().toISOString()));
+}
 
 console.log(`\n${email} is a Venstock platform admin${existing ? " (reset: password, authenticator and sessions cleared)" : ""}.`);
 console.log(`Invite code (valid 7 days): ${invite.pretty}`);

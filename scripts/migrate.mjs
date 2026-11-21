@@ -15,7 +15,7 @@
 // databases are done / failed / not started, and records each vendor's latest migration in tenants.schema_version.
 // Re-running resumes: applied files are skipped by wrangler (its d1_migrations table).
 import { join } from "node:path";
-import { parseArgs, d1Target, die, sqlString, ROOT } from "./lib/d1-target.mjs";
+import { parseArgs, d1Target, die, stmt, ROOT } from "./lib/d1-target.mjs";
 import { verifyDir, checkRepoMigrations, migrationFiles } from "./lib/manifest.mjs";
 import { vendorBinding } from "./lib/wrangler-config.mjs";
 
@@ -41,6 +41,12 @@ export function main(argv) {
   const latestVendor = migrationFiles(join(root, "vendor")).at(-1) || null;
 
   const t = d1Target({ remote, migrationsRoot });
+  return runMigrations(t, { doControl, doVendors, slug: flags["--tenant"], latestVendor });
+}
+
+// Applies migrations through an existing target (create-tenant calls this for one new vendor). Returns the exit
+// code and prints the per-database report.
+export function runMigrations(t, { doControl, doVendors, slug, latestVendor }) {
   const report = [];
   const finish = (failed) => {
     console.log("\nDatabase              Result        Applied this run");
@@ -77,7 +83,6 @@ export function main(argv) {
 
   // 3. Vendors in id order. Provisioning vendors are included (create-tenant runs this before marking them active).
   if (!all) die("The control database has no tenants table yet: run node scripts/migrate.mjs --control first.");
-  const slug = flags["--tenant"];
   const vendors = slug ? all.filter((v) => v.slug.toLowerCase() === slug.toLowerCase()) : all;
   if (slug && !vendors.length) die(`No vendor with the slug "${slug}" (or it was abandoned).`);
   const todo = vendors.filter((v) => v.db_id);
@@ -91,7 +96,7 @@ export function main(argv) {
       return finish(r.entry);
     }
     const version = r.after.at(-1) || null;
-    t.run("CONTROL", `UPDATE tenants SET schema_version = ${version ? sqlString(version) : "NULL"} WHERE id = ${v.id}`);
+    t.run("CONTROL", stmt("UPDATE tenants SET schema_version = ? WHERE id = ?", version, v.id));
     if (version !== latestVendor) {
       report.at(-1).result = "BEHIND";
       return finish({ db: label, output: `${label} is at ${version}, expected ${latestVendor}.` });

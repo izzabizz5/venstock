@@ -48,8 +48,20 @@ export function localRun(persistTo, databaseId, sql) {
   } finally { db.close(); }
 }
 
-// One statement; its rows.
-export function localQuery(persistTo, databaseId, sql) {
+// Prepared statements ({ sql, params }), all or nothing, parameters bound natively.
+export function localRunStatements(persistTo, databaseId, stmts) {
   const db = open(persistTo, databaseId);
-  try { return plain(db.prepare(sql).all()); } finally { db.close(); }
+  try {
+    db.exec("BEGIN");
+    try {
+      for (const s of stmts) db.prepare(s.sql).run(...s.params);
+      db.exec("COMMIT");
+    } catch (e) { db.exec("ROLLBACK"); throw e; }
+  } finally { db.close(); }
+}
+
+// One statement; its rows.
+export function localQuery(persistTo, databaseId, sql, params = []) {
+  const db = open(persistTo, databaseId);
+  try { return plain(db.prepare(sql).all(...params)); } finally { db.close(); }
 }
