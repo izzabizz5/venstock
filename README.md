@@ -66,17 +66,18 @@ Requires Node.js. There is no `package.json`; everything runs through `npx wrang
 See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant isolation, migrations).
 
 ### Run it locally
+Venstock is mid-conversion to one database per vendor (see CLAUDE.md). The vendor scripts work today:
 ```bash
-npx wrangler d1 execute DB --local --file=migrations/vendor/0001_baseline.sql   # first time only
-node scripts/add-admin.mjs you@example.com                # first time only: prints your invite link
-npx wrangler dev                                          # then open http://localhost:8788
+node scripts/migrate.mjs --control                                    # first time only: the vendor registry
+node scripts/create-tenant.mjs demo "Demo Shop" you@example.com       # a vendor with its own database + invite
+node scripts/add-admin.mjs --tenant demo you@example.com              # add or reset an admin (locked out? run again)
 ```
-Open the invite link, set a password, and scan the QR code with an authenticator app.
-Locked out locally? Run the `add-admin.mjs` command again for a fresh invite.
+The Worker itself still reads the single interim `DB` database until the hostname resolver lands, so for now
+`npx wrangler dev` serves an app with no way to sign in locally; use the tests. This section will say
+`npx wrangler dev -c .wrangler-generated/local/wrangler.toml` and `http://demo.localhost:8788` once that is done.
 
-`scripts/add-admin.mjs` uses the local database unless you pass `--remote`. With `--remote`, it reads
-`database_name` from `wrangler.toml` and refuses to run unless it is exactly `venstock-dev`. Either way it
-prints which database it is about to touch.
+Every script is local unless you pass `--remote`, and then it only touches databases named `venstock-dev-control`
+or `venstock-dev-t<id>`. Each prints which databases it is about to touch.
 
 ### Database changes
 Each vendor will have its own database (being built; see CLAUDE.md). Schema changes are new numbered files in
@@ -95,8 +96,9 @@ node --test 'tests/**/*.test.mjs'
 No dependencies to install. Each test file starts the app on its own temporary local database and removes it afterwards. Checks that need a real browser are listed in `tests/MANUAL.md`.
 
 ### Deploying
-Deployment for Venstock isn't set up yet. `wrangler.toml` has placeholder database values. The only remote
-database Venstock may use is `venstock-dev`.
+Deployment for Venstock isn't set up yet. `wrangler.toml` has placeholder database values. When it is,
+`node scripts/release.mjs` checks the registry, migrations and tests, writes the deploy config and prints the deploy
+and `git tag` commands for you to run.
 
 ### Project layout
 - `public/`: the app (installable web app): `index.html`, `app.js` (every screen plus the offline sale queue),
@@ -106,4 +108,5 @@ database Venstock may use is `venstock-dev`.
 - `src/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
 - `tests/`: automated tests (`node --test`) and `tests/MANUAL.md` for browser checks.
 - `migrations/`: the database schema as numbered migrations (`control/`, `vendor/`), applied by `scripts/migrate.mjs`.
-- `scripts/add-admin.mjs`: creates or resets an admin and prints an invite code (local by default).
+- `scripts/`: `create-tenant.mjs` (new vendor, `--resume`, `--abandon`), `add-admin.mjs --tenant` (vendor admins),
+  `create-platform-admin.mjs` (Venstock staff), `migrate.mjs`, `build-config.mjs`, `release.mjs`.

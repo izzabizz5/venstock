@@ -22,9 +22,22 @@ There is no `package.json`; everything runs through `npx wrangler` and `node`.
 Local development (the only kind allowed by default). Until the resolver lands, the app still uses the `DB` binding:
 ```bash
 npx wrangler d1 execute DB --local --file=migrations/vendor/0001_baseline.sql   # fresh local DB, first time only
-node scripts/add-admin.mjs you@example.com                                       # invite link for a local admin
 npx wrangler dev                                                                 # http://localhost:8788
 ```
+
+Vendors and staff (local by default; each prints which databases it touches):
+```bash
+node scripts/create-tenant.mjs <slug> "<Vendor name>" owner@example.com   # registry row, database, migrations, owner invite
+node scripts/create-tenant.mjs --resume <slug>     # finish one that stopped part-way (each step is safe to repeat)
+node scripts/create-tenant.mjs --abandon <slug>    # provisioning only: mark deleted, print the database to drop BY HAND
+node scripts/add-admin.mjs --tenant <slug> you@example.com    # add or reset an admin in that vendor's own database
+node scripts/create-platform-admin.mjs you@example.com        # Venstock staff, control database only
+node scripts/build-config.mjs                      # write .wrangler-generated/local/wrangler.toml from the registry
+node scripts/release.mjs --local                   # release checks; the user runs the remote form, never Claude
+```
+`release.mjs` refuses when a vendor is behind on migrations, an active vendor has no database id, the vendor count
+dropped since the last release (unless `--accept-removed <slugs>`), or the tests fail. It warns about vendors stuck
+in "provisioning". It only *prints* the deploy and `git tag release-…` commands: Claude never runs them.
 
 Migrations (see `migrations/README.md`):
 ```bash
@@ -76,7 +89,8 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - `src/lib/auth.js`: invite-only sign-up, PBKDF2 passwords, TOTP 2FA, session cookie (`pos_session`),
   `/api/auth/*` and admin `/api/users/*` routes.
 - `src/lib/tenant.js`: hostname → slug (`<slug>.<BASE_DOMAIN>`, one level, reserved slugs).
-- `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `add-admin.mjs`; `scripts/lib/` holds the local/remote guard
+- `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `create-tenant.mjs`, `add-admin.mjs`,
+  `create-platform-admin.mjs`, `build-config.mjs`, `release.mjs`; `scripts/lib/` holds the local/remote guard
   (`d1-target.mjs`), the generated-config writer and the checksum manifest code.
 - `tests/`: `node --test` harness and tests; `tests/MANUAL.md` for browser-only checks.
 - `docs/before-first-vendor.md`: what must exist before any paying vendor is onboarded (including drills you run).

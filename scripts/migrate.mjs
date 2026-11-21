@@ -65,20 +65,18 @@ export function main(argv) {
     return { ok: true, after };
   };
 
-  // 2. Control first: the registry lives there.
-  t.writeConfig([]);
+  // 2. Control first: the registry lives there (control-only commands use a private config; see d1-target.mjs).
   if (doControl) {
     const r = applyTo("CONTROL", "control");
     if (!r.ok) return finish(r.entry);
   }
+  // With control up to date, (re)write the shared generated config for EVERY registered vendor (it is the file local
+  // dev and deploys use), whatever subset is being migrated.
+  const all = t.refreshConfig();
   if (!doVendors) return finish(null);
 
   // 3. Vendors in id order. Provisioning vendors are included (create-tenant runs this before marking them active).
-  if (!t.tableExists("CONTROL", "tenants")) die("The control database has no tenants table yet: run node scripts/migrate.mjs --control first.");
-  // The generated config always lists every registered vendor (it is the same file local dev and deploys use),
-  // even when only one vendor is being migrated.
-  const all = t.query("CONTROL", "SELECT id, slug, status, db_name, db_id FROM tenants WHERE status != 'deleted' ORDER BY id");
-  t.writeConfig(all);
+  if (!all) die("The control database has no tenants table yet: run node scripts/migrate.mjs --control first.");
   const slug = flags["--tenant"];
   const vendors = slug ? all.filter((v) => v.slug.toLowerCase() === slug.toLowerCase()) : all;
   if (slug && !vendors.length) die(`No vendor with the slug "${slug}" (or it was abandoned).`);

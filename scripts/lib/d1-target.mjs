@@ -6,11 +6,13 @@
 // Tests point local runs at throwaway folders with VENSTOCK_PERSIST_TO and VENSTOCK_GENERATED_DIR; both are ignored
 // for remote runs.
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createHash, randomInt } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderConfig, readBaseToml, LOCAL_CONTROL, vendorBinding } from "./wrangler-config.mjs";
+import { localRun, localQuery } from "./local-d1.mjs";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const ALLOWED_REMOTE = /^venstock-dev-(control|t\d+)$/;
@@ -59,9 +61,18 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
     outDir = process.env.VENSTOCK_GENERATED_DIR || join(ROOT, ".wrangler-generated", "local");
     if (!quiet) console.log(`About to touch LOCAL D1 databases (state in ${persistTo}).`);
   }
-  const configPath = join(outDir, "wrangler.toml");
-  // database_name behind each binding in the config currently written (checked before every remote call).
+  // The shared generated config (what local dev and deploys use) is only ever written with the FULL vendor list, by
+  // writeConfig(). Until then, commands run against a private control-only config in a temp folder, so a script that
+  // only reads the registry, or stops early, can never leave the shared file without its vendor bindings.
+  const generatedPath = join(outDir, "wrangler.toml");
+  const bootstrapDir = mkdtempSync(join(tmpdir(), "venstock-bootstrap-"));
+  process.on("exit", () => rmSync(bootstrapDir, { recursive: true, force: true }));
+  let configPath = join(bootstrapDir, "wrangler.toml");
+  writeFileSync(configPath, renderConfig({ root: ROOT, outDir: bootstrapDir, control, vendors: [], migrationsRoot }));
+  // database_name (checked before every remote call) and database_id (local file) behind each binding in the
+  // config currently in use.
   let names = { CONTROL: control.name };
+  let ids = { CONTROL: control.id };
 
   const where = remote ? ["--remote"] : ["--local", "--persist-to", persistTo];
   const checkBinding = (binding) => {
@@ -72,25 +83,46 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
     spawnSync("npx", ["wrangler", ...args], { cwd: ROOT, encoding: "utf8", stdio: ["ignore", capture ? "pipe" : "inherit", "pipe"] });
 
   const t = {
-    remote, configPath, persistTo, control,
-    // Writes the generated config with CONTROL plus these vendors (those with a db_id get a binding).
-    writeConfig(vendors = []) {
+    remote, generatedPath, persistTo, control,
+    get configPath() { return configPath; },
+    // Writes the shared generated config with CONTROL plus these vendors (those with a db_id get a binding).
+    // Callers pass every non-deleted vendor in the registry, never a subset.
+    writeConfig(vendors) {
+      if (!Array.isArray(vendors)) throw new Error("writeConfig needs the full vendor list");
       for (const v of vendors) if (v.db_id && remote && !ALLOWED_REMOTE.test(v.db_name)) die(`Refusing --remote: vendor ${v.id}'s database is ${v.db_name}, not venstock-dev-t<id>.`);
       mkdirSync(outDir, { recursive: true });
-      writeFileSync(configPath, renderConfig({ root: ROOT, outDir, control, vendors, migrationsRoot }));
+      writeFileSync(generatedPath, renderConfig({ root: ROOT, outDir, control, vendors, migrationsRoot }));
+      configPath = generatedPath;
       names = { CONTROL: control.name };
-      for (const v of vendors) if (v.db_id) names[vendorBinding(v.id)] = v.db_name;
-      return configPath;
+      ids = { CONTROL: control.id };
+      for (const v of vendors) if (v.db_id) { names[vendorBinding(v.id)] = v.db_name; ids[vendorBinding(v.id)] = v.db_id; }
+      return generatedPath;
+    },
+    // Reads every non-deleted vendor from the registry and writes the shared config for all of them.
+    refreshConfig() {
+      if (!t.tableExists("CONTROL", "tenants")) return null;
+      const vendors = t.query("CONTROL", `SELECT id, slug, name, status, db_name, db_id, schema_version, owner_email, created_at, status_changed_at
+        FROM tenants WHERE status != 'deleted' ORDER BY id`);
+      t.writeConfig(vendors);
+      return vendors;
     },
     // Runs SQL on one binding; throws with wrangler's error text on failure.
     run(binding, sql) {
       checkBinding(binding);
+      if (!remote) {
+        try { return localRun(persistTo, ids[binding], sql); }
+        catch (e) { throw new Error(`d1 execute on ${binding} failed:\n${e.message}`); }
+      }
       const r = wrangler(["d1", "execute", binding, ...where, "-c", configPath, "--command", sql]);
       if (r.status !== 0) throw new Error(`d1 execute on ${binding} failed:\n${(r.stderr || r.stdout || "").trim()}`);
     },
     // One SELECT on one binding; returns its rows.
     query(binding, sql) {
       checkBinding(binding);
+      if (!remote) {
+        try { return localQuery(persistTo, ids[binding], sql); }
+        catch (e) { throw new Error(`d1 query on ${binding} failed:\n${e.message}`); }
+      }
       const r = wrangler(["d1", "execute", binding, ...where, "-c", configPath, "--command", sql, "--json"]);
       if (r.status !== 0) throw new Error(`d1 query on ${binding} failed:\n${(r.stderr || r.stdout || "").trim()}`);
       return JSON.parse(r.stdout)[0].results;

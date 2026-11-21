@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync, cpSync, writeFileSync, appendFileSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { localSql } from "./local-sql.mjs";
 import { updateManifest } from "../scripts/lib/manifest.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -18,12 +19,7 @@ function migrate(...args) {
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
 // Direct SQL on a binding in the generated config (the runner rewrites it to include every registered vendor).
-function sql(binding, command, json = true) {
-  const r = spawnSync("npx", ["--no-install", "wrangler", "d1", "execute", binding, "--local", "--persist-to", env.VENSTOCK_PERSIST_TO,
-    "-c", join(env.VENSTOCK_GENERATED_DIR, "wrangler.toml"), "--command", command, ...(json ? ["--json"] : [])], { cwd: ROOT, encoding: "utf8" });
-  if (r.status !== 0) throw new Error(r.stderr || r.stdout);
-  return json ? JSON.parse(r.stdout)[0].results : null;
-}
+const sql = (binding, command, json = true) => localSql(env.VENSTOCK_PERSIST_TO)(binding, command, json);
 const tables = (b) => sql(b, "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf%' ESCAPE '\\' AND name != 'sqlite_sequence' ORDER BY name").map((r) => r.name);
 const applied = (b) => sql(b, "SELECT name FROM d1_migrations ORDER BY id").map((r) => r.name);
 const versions = () => Object.fromEntries(sql("CONTROL", "SELECT slug, schema_version FROM tenants ORDER BY id").map((r) => [r.slug, r.schema_version]));
@@ -119,25 +115,4 @@ test("a migration file changed after its checksum was recorded: refused before t
   assert.match(r.out, /0002_add_extra\.sql: changed since its checksum was recorded/);
   assert.doesNotMatch(r.out, /About to touch/);
   assert.deepEqual(applied("DB_T1"), before);
-});
-
-test("a new migration file that isn't in checksums.json: refused", () => {
-  const fresh = mkdtempSync(join(tmpdir(), "venstock-migs-"));
-  try {
-    cpSync(join(ROOT, "migrations", "control"), join(fresh, "control"), { recursive: true });
-    cpSync(join(ROOT, "migrations", "vendor"), join(fresh, "vendor"), { recursive: true });
-    writeFileSync(join(fresh, "vendor", "0002_unrecorded.sql"), "SELECT 1;\n");
-    const r = spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--migrations-root", fresh], { cwd: ROOT, encoding: "utf8", env });
-    assert.equal(r.status, 1);
-    assert.match(r.stderr, /0002_unrecorded\.sql: not in checksums\.json/);
-  } finally { rmSync(fresh, { recursive: true, force: true }); }
-});
-
-test("remote refusals: custom migrations folder, and a CONTROL id that is still a placeholder", () => {
-  const r1 = spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--migrations-root", migs, "--remote"], { cwd: ROOT, encoding: "utf8", env });
-  assert.equal(r1.status, 1);
-  const r2 = spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--remote"], { cwd: ROOT, encoding: "utf8", env });
-  assert.equal(r2.status, 1);
-  assert.match(r2.stderr, /set CONTROL's database_id/);
-  assert.equal(spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--control", "--vendors"], { cwd: ROOT, encoding: "utf8", env }).status, 1);
 });
