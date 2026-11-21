@@ -16,10 +16,12 @@ There is no `package.json`; everything runs through `npx wrangler` and `node`.
 Local development (the only kind allowed by default):
 ```bash
 npx wrangler d1 execute DB --local --file=schema.sql               # fresh local DB, first time only
-node scripts/add-admin.mjs you@example.com --local                 # prints an invite link for a local admin
+node scripts/add-admin.mjs you@example.com                         # prints an invite link for a local admin
 npx wrangler pages dev public                                      # http://localhost:8788
 ```
-`scripts/add-admin.mjs` defaults to `--remote`. **Always pass `--local`.**
+`scripts/add-admin.mjs` uses the local database by default. Remote needs an explicit `--remote`, and then the
+script refuses to run unless `wrangler.toml` has `database_name = "venstock-dev"`. It prints which database
+it is about to touch before it runs. Any new script in `scripts/` that talks to D1 must work the same way.
 
 Apply a migration locally:
 ```bash
@@ -29,13 +31,13 @@ npx wrangler d1 execute DB --local --file=migrations/NNN_name.sql
 
 Tests: **there are no tests yet** and no test runner is configured.
 
-Deploy: **not set up for Venstock. Don't deploy unless explicitly asked.** README's deploy command
-(`npx wrangler pages deploy public --project-name=show-pos`) and its `--remote` commands target the
-original production app. Never run them.
+Deploy: **not set up for Venstock. Don't deploy unless explicitly asked.** The original app's deploy command
+(`npx wrangler pages deploy public --project-name=show-pos`) and any `--remote` command against `show-pos-db`
+target the original production app. Never run them.
 
 ## Rules
 - Never run any wrangler command with `--remote` in this repo, and never deploy, unless explicitly asked.
-  Local development only (`--local`). This includes `scripts/add-admin.mjs`: always pass `--local`.
+  Local development only (`--local`). This includes `scripts/add-admin.mjs --remote`.
 - The only remote database allowed is `venstock-dev`. Never touch any other D1 database or Pages project
   (in particular `show-pos-db` and the `show-pos` Pages project).
 - Every query on vendor data must filter by `tenant_id`. The `tenant_id` must come from the logged-in session,
@@ -59,5 +61,6 @@ original production app. Never run them.
   `/api/auth/*` and admin `/api/users/*` routes. Not a route itself.
 - `public/`: the PWA front end: `index.html`, `app.js` (all screens + offline sale queue), `style.css`,
   `sw.js` (app-shell cache), `manifest.webmanifest`, `vendor/qrcode.js`.
-- `scripts/add-admin.mjs`: creates/resets an admin and prints an invite code (defaults to remote; use `--local`).
-- `README.md`: end-user guide and original single-vendor setup (its remote/deploy steps target production).
+- `scripts/add-admin.mjs`: creates/resets an admin and prints an invite code (local by default; `--remote`
+  only works against `venstock-dev`).
+- `README.md`: what Venstock is, the vendor guide, and local development.

@@ -68,13 +68,15 @@ See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant
 ### Run it locally
 ```bash
 npx wrangler d1 execute DB --local --file=schema.sql      # first time only: create the local tables
-node scripts/add-admin.mjs you@example.com --local        # first time only: prints your invite link
+node scripts/add-admin.mjs you@example.com                # first time only: prints your invite link
 npx wrangler pages dev public                             # then open http://localhost:8788
 ```
 Open the invite link, set a password, and scan the QR code with an authenticator app.
 Locked out locally? Run the `add-admin.mjs` command again for a fresh invite.
 
-**Always pass `--local` to `scripts/add-admin.mjs`.** Without it, the script writes to the remote database.
+`scripts/add-admin.mjs` uses the local database unless you pass `--remote`. With `--remote`, it reads
+`database_name` from `wrangler.toml` and refuses to run unless it is exactly `venstock-dev`. Either way it
+prints which database it is about to touch.
 
 ### Database changes
 `schema.sql` is the full schema for a fresh database. Changes go in a new numbered file in `migrations/`
@@ -97,4 +99,4 @@ database Venstock may use is `venstock-dev`.
 - `functions/api/[[route]].js`: the API: items, shows, sales, settings, CSV export.
 - `functions/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
 - `schema.sql` and `migrations/`: the database schema.
-- `scripts/add-admin.mjs`: creates or resets an admin and prints an invite code.
+- `scripts/add-admin.mjs`: creates or resets an admin and prints an invite code (local by default).
