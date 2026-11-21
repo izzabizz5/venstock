@@ -17,7 +17,7 @@ single `DB` binding until the resolver lands (steps 5–7 of the plan). Old name
 "show pos") still appear in places.
 
 ## Commands
-There is no `package.json`; everything runs through `npx wrangler` and `node`.
+`package.json` holds only the two test scripts (no dependencies); everything else runs through `npx wrangler` and `node`.
 
 Local development (the only kind allowed by default). Until the resolver lands, the app still uses the `DB` binding:
 ```bash
@@ -49,10 +49,18 @@ Scripts in `scripts/` go through `scripts/lib/d1-target.mjs`: local by default (
 config in `.wrangler-generated/local/`); remote only with an explicit `--remote`, and then only for databases named
 `venstock-dev-control` or `venstock-dev-t<id>`. They print which databases they are about to touch.
 
-Tests (no dependencies; each test starts its own throwaway local databases):
+Tests (no dependencies; every test uses its own throwaway local databases):
 ```bash
-node --test 'tests/**/*.test.mjs'
+node --test tests/<file>.test.mjs   # while iterating: only the file(s) for the code you changed
+npm run test:fast                   # tests/**/*.unit.test.mjs: no wrangler, a few seconds
+npm run test:full                   # everything (about 2-3 minutes): before each commit and at STOP points
 ```
+- `*.unit.test.mjs` must never start wrangler or open a database. Anything that does belongs in a plain `*.test.mjs`.
+- Mutation checks (break a rule, confirm a test fails) only for isolation-critical code: the resolver, the identity
+  check, the binding derivation, the lockdown. Never weaken an assertion to make a test faster.
+- Local database files are read and written directly (`scripts/lib/local-d1.mjs`, checked against real wrangler by
+  `tests/local-d1.test.mjs`); starting wrangler costs about 5 s, so tests start it only for `wrangler dev` and
+  `d1 migrations apply`.
 - `tests/config.mjs` is the only place that says how the app is started.
 - `tests/harness.mjs` seeds users with known passwords and authenticator secrets and logs in with real 6-digit codes.
 - Checks that need a real browser are listed in `tests/MANUAL.md`.

@@ -1,0 +1,9 @@
+{
+  "name": "venstock",
+  "private": true,
+  "description": "Offline-first point of sale for vendor shows. No dependencies: wrangler runs through npx.",
+  "scripts": {
+    "test:fast": "node --test \"tests/**/*.unit.test.mjs\"",
+    "test:full": "node --test \"tests/**/*.test.mjs\""
+  }
+}

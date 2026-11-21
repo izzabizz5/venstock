@@ -1,5 +1,5 @@
 // Migration checksum manifests: migrations/<kind>/checksums.json maps each migration file to its SHA-256.
-// Rules (enforced by scripts/migrate.mjs, scripts/release.mjs and tests/manifest.test.mjs):
+// Rules (enforced by scripts/migrate.mjs, scripts/release.mjs and tests/manifest.unit.test.mjs):
 //   - every migration file on disk is in the manifest, with a matching checksum;
 //   - entries recorded at the latest release-* git tag never change (only new entries may be added);
 //   - before the first release tag there are no recorded entries.

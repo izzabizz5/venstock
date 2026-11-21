@@ -1,6 +1,7 @@
 // All API routes live here: /api/items, /api/shows, /api/sales, /api/settings, /api/export,
 // plus /api/auth (log in / sign up) and /api/users (admins). Everything except /api/auth needs a full login.
 import { authRoutes, userRoutes, currentSession } from "./lib/auth.js";
+import { validateRestock } from "./lib/validate.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -21,9 +22,6 @@ const csvResponse = (rows, filename) =>
   });
 
 // Settings the app falls back to when nothing has been saved yet.
-const MAX_RESTOCK_QTY = 100000;
-const MAX_RESTOCK_ITEMS = 100;
-
 const DEFAULT_SETTINGS = {
   registers: 3,
   // Bundle deals, always on: buy `qty` items priced `unit_price_cents`, get `off_cents` off.
@@ -133,16 +131,12 @@ export async function handleApi({ request, env, params }) {
       // Restock: add quantities to several items at once.
       // Restock: add quantities to several items at once, all or nothing. Ids and quantities must be JSON whole
       // numbers above zero (no strings, negatives or fractions); one bad entry, or an id that doesn't exist, refuses
-      // the whole request. At most MAX_RESTOCK_ITEMS, so it is always one atomic D1 batch (D1 also allows at most
+      // the whole request. At most MAX_RESTOCK_ITEMS (src/lib/validate.js), so it is always one atomic D1 batch (D1 also allows at most
       // 100 bound parameters, which the existence check uses). Lowering a count is done by editing the item.
       if (b === "restock" && m === "POST") {
-        const raw = Array.isArray(body.items) ? body.items : [];
-        if (!raw.length) return fail("Nothing to restock");
-        if (raw.length > MAX_RESTOCK_ITEMS) return fail(`Restock at most ${MAX_RESTOCK_ITEMS} items at once`);
-        const wholeAbove0 = (v, max) => typeof v === "number" && Number.isInteger(v) && v > 0 && v <= max;
-        if (!raw.every((i) => i && wholeAbove0(i.id, Number.MAX_SAFE_INTEGER) && wholeAbove0(i.qty, MAX_RESTOCK_QTY))) {
-          return fail(`Each restock needs an item and a whole number from 1 to ${MAX_RESTOCK_QTY}`);
-        }
+        const v = validateRestock(body);
+        if (v.error) return fail(v.error);
+        const raw = v.items;
         const ids = [...new Set(raw.map((i) => i.id))];
         const { results: found } = await db
           .prepare(`SELECT id FROM items WHERE id IN (${ids.map(() => "?").join(",")})`)

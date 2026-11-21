@@ -62,7 +62,7 @@ Shows → Download CSV for any show.
 
 ## Development
 
-Requires Node.js. There is no `package.json`; everything runs through `npx wrangler` and `node`.
+Requires Node.js 22.13 or later. Nothing to install: `package.json` only holds the test scripts, and wrangler runs through `npx`.
 See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant isolation, migrations).
 
 ### Run it locally
@@ -91,9 +91,10 @@ Never edit a migration that already exists, and keep migrations backward compati
 
 ### Tests
 ```bash
-node --test 'tests/**/*.test.mjs'
+npm run test:fast   # unit tests, a few seconds
+npm run test:full   # everything, including real local servers and databases (a few minutes)
 ```
-No dependencies to install. Each test file starts the app on its own temporary local database and removes it afterwards. Checks that need a real browser are listed in `tests/MANUAL.md`.
+Each test file uses its own temporary local databases and removes them afterwards. Checks that need a real browser are listed in `tests/MANUAL.md`.
 
 ### Deploying
 Deployment for Venstock isn't set up yet. `wrangler.toml` has placeholder database values. When it is,
