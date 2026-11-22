@@ -192,6 +192,35 @@ p { margin: 0; max-width: 60ch; }
   .top nav a { min-height: 44px; }
 }
 
+/* ---------- any screen 700px and wider: when there is height to spare, the main content fills it ----------
+   (index rows, the four steps, the join blocks and the pricing notes share it, contents centred). Nothing
+   stretches when the content is taller than the screen, so laptops look the same. */
+@media (min-width: 700px) {
+  main { display: flex; flex-direction: column; }
+  .index { flex: 1; display: flex; }
+  .index .wrap { align-items: stretch; }
+  .index .wrap, .body:has(.steps) .wrap, .join-body .wrap, .price-notes .wrap { width: 100%; } /* flex items: keep the full column width */
+  .doors { display: flex; flex-direction: column; }
+  .door { flex: 1; align-content: center; }
+  .body:has(.steps) { flex: 1; display: flex; }
+  .body:has(.steps) .wrap { display: flex; flex-direction: column; }
+  .steps { flex: 1; display: flex; flex-direction: column; }
+  .steps li { flex: 1; align-content: center; }
+  .price-notes { flex: 1; display: flex; align-items: center; }
+  .join-body { flex: 1; display: flex; align-items: center; } /* the two columns stay top-aligned; the pair is centred */
+}
+
+/* ---------- very wide screens: the whole page scales up in steps, so it reads like the laptop layout, bigger ----------
+   min-height divides by the zoom because zoomed viewport units grow with it. */
+@media (min-width: 1600px) and (orientation: landscape) { html { --z: 1.2; } }
+@media (min-width: 1900px) and (orientation: landscape) { html { --z: 1.4; } }
+@media (min-width: 2300px) and (orientation: landscape) { html { --z: 1.7; } }
+@media (min-width: 2800px) and (orientation: landscape) { html { --z: 2; } }
+@media (min-width: 1600px) and (orientation: landscape) {
+  body { zoom: var(--z); min-height: calc(100vh / var(--z)); }
+  .open-words { padding-left: max(var(--s5), calc((100vw / var(--z) - 1120px) / 2 + var(--s5))); }
+}
+
 /* ---------- tall tablets (portrait, 700px and wider: iPad mini 768, Surface 960, iPad Pro 1032) ----------
    The pages are short lists made for wide screens; on a tall screen they left a wall of empty cream. Here the
    main content fills the height (steps, index rows and the join blocks share it evenly, contents centred), the
@@ -252,7 +281,7 @@ p { margin: 0; max-width: 60ch; }
   .price-notes p { font-size: 18px; }
 
   /* join: the two blocks stacked, each half the height, contents centred */
-  .join-body { flex: 1; display: flex; padding: 0; }
+  .join-body { flex: 1; display: flex; align-items: stretch; padding: 0; }
   .join-body .wrap { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   .join-body .wrap > div, .join-body .wrap > div + div {
     display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
