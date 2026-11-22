@@ -210,15 +210,19 @@ p { margin: 0; max-width: 60ch; }
   .join-body { flex: 1; display: flex; align-items: center; } /* the two columns stay top-aligned; the pair is centred */
 }
 
-/* ---------- very wide screens: the whole page scales up in steps, so it reads like the laptop layout, bigger ----------
-   min-height divides by the zoom because zoomed viewport units grow with it. */
-@media (min-width: 1600px) and (orientation: landscape) { html { --z: 1.2; } }
-@media (min-width: 1900px) and (orientation: landscape) { html { --z: 1.4; } }
-@media (min-width: 2300px) and (orientation: landscape) { html { --z: 1.7; } }
-@media (min-width: 2800px) and (orientation: landscape) { html { --z: 2; } }
+/* ---------- very wide screens: spread out, with only a little scaling ----------
+   The content column widens to ~86% of the screen and the page scales up gently in steps. min-height and the
+   column width divide by the zoom because zoomed viewport units grow with it. */
+@media (min-width: 1600px) and (orientation: landscape) { html { --z: 1; } }
+@media (min-width: 1900px) and (orientation: landscape) { html { --z: 1.05; } }
+@media (min-width: 2300px) and (orientation: landscape) { html { --z: 1.2; } }
+@media (min-width: 2800px) and (orientation: landscape) { html { --z: 1.4; } }
 @media (min-width: 1600px) and (orientation: landscape) {
-  body { zoom: var(--z); min-height: calc(100vh / var(--z)); }
-  .open-words { padding-left: max(var(--s5), calc((100vw / var(--z) - 1120px) / 2 + var(--s5))); }
+  body { zoom: var(--z); min-height: calc(100vh / var(--z)); --wmax: calc(100vw / var(--z) * .86); }
+  .wrap, .top .wrap { max-width: var(--wmax); }
+  .open-words { padding-left: max(var(--s5), calc((100vw / var(--z) - var(--wmax)) / 2 + var(--s5))); }
+  .open-words p { max-width: 60ch; }
+  .sample { max-width: 380px; }
 }
 
 /* ---------- tall tablets (portrait, 700px and wider: iPad mini 768, Surface 960, iPad Pro 1032) ----------
