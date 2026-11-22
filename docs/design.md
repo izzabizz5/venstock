@@ -74,6 +74,7 @@ Components never use a palette colour directly; they use a role, and each role h
 | `--band`, `--on-band` | sky, ink | dark surface, cream | the header band |
 | `--panel`, `--on-panel`, `--panel-hair` | deep blue, cream | same | the order panel, totals, the running show |
 | `--tile`, `--tile-on`, `--hair` | cream, sky, sage | ground, dark surface, dark line | item tiles, selected tile, hairlines |
+| `--stripe` | `#ECE9C6` | `#122438` | every other row in the items list |
 | `--edge`, `--rule` | ink | dark muted, cream | control edges (2px), structural rules (6px) |
 | `--mark`, `--on-mark` | mustard, ink | same | active filter, deals, notices, invites, support banner |
 | `--action`, `--on-action`, `--action-edge` | orange, ink, ink | orange, ink, orange | the one main action |
@@ -90,7 +91,7 @@ Components never use a palette colour directly; they use a role, and each role h
 | `--fs-l` | 20px | small headings |
 | `--fs-xl` | 28px | section and popup headings |
 | `--fs-2xl` | 40px | page titles |
-| `--fs-total` | 52px | the sale total (42–44px on small screens) |
+| `--fs-total` | 22px | the sale total: bold and wide, just above the 16px subtotal |
 | `--s1`…`--s7` | 4, 8, 12, 16, 24, 32, 48px | the only spacing steps |
 | `--tap` | 48px | minimum height and width of anything tappable |
 | `--hair-w`, `--edge-w`, `--rule-w` | 2px, 2px, 6px | hairlines, control edges, structural rules |
@@ -142,8 +143,8 @@ The screen is built from flat color fields; a change of color stands in for a bo
 - **Header:** a sky band. The current tab is an ink block. On phones the tabs move to a bar along the bottom.
   The staff admin page uses an ink header instead, so it can never be mistaken for a vendor's shop.
 - **Sell:** cream item tiles separated by sage gaps; an item in the order fills sky blue with a count in its
-  corner. The order panel is the deep-blue "money field" with the largest number on screen, the total, and the
-  orange Complete sale. On phones the order is a sheet opened from a deep-blue bar above the tabs.
+  corner. The order panel is the deep-blue "money field" with the total (bold and wide, just above the subtotal)
+  and the orange Complete sale. On phones the order is a sheet opened from a deep-blue bar above the tabs.
 - **Other screens:** ruled sections (a 6px rule and a serif heading) with hairline rows. Repeated per-row buttons
   are dark or outlined, so orange stays one main action per section. Deep blue marks money (show totals, the
   running show). Mustard marks deals, notices, invites, the support banner and the support-link countdown. Brick

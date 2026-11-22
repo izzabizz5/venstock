@@ -107,11 +107,14 @@ Fill demo first: `node scripts/seed-demo.mjs --replace` (local only; wipes demo'
 1. Logged out: a deep-blue field with the stacked wordmark beside (desktop) or above (phone) the form. The header
    shows only the Dark/Light button.
 2. Sell screen, desktop: sky header band, cream item tiles with sage gaps, deep-blue order panel. Tap items: each
-   fills sky blue with a count in its corner. The total is the largest thing on screen; Complete sale is orange.
+   fills sky blue with a count in its corner. The total is bold, a little bigger than the subtotal; Complete sale is
+   orange. On an iPad (768 and 1032 wide) the header fits on one line and the show name isn't cut off; on a phone
+   every category is visible (they wrap onto a second row).
 3. Phone (or a 390px window): the tabs sit along the bottom; a deep-blue bar above them shows the item count and
    total. Tap it: the order slides up; the × closes it. Every button is easy to hit with a thumb.
 4. Checkout: payment is three joined buttons (the chosen one dark); Exact / $20 / $50 fill the cash box; Change due
    is large. Confirm sale is orange with a dark edge.
+   Items list: every other row has a slightly darker background.
 5. Press Dark: the whole app turns dark navy, text stays readable, the button now says Light; reload keeps it.
    The browser's address bar colour follows (Android Chrome).
 6. With "reduce motion" on in the OS, the order sheet and toast appear without sliding.

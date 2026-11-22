@@ -13,6 +13,9 @@
    @pair --text on --tile body
    @pair --text-2 on --tile body
    @pair --text on --tile-on body
+   @pair --text on --stripe body
+   @pair --text-2 on --stripe body
+   @pair --danger on --stripe body
    @pair --danger on --page body
    @pair --danger on --tile body
    @pair --danger on --surface body
@@ -76,6 +79,7 @@
   --tile: var(--c-cream);
   --tile-on: var(--c-sky);            /* an item that is in the order */
   --hair: var(--c-sage);              /* hairlines and the gaps between tiles */
+  --stripe: #ECE9C6;                  /* every other row in long lists */
   --edge: var(--c-ink);               /* edges of inputs and buttons */
   --rule: var(--c-ink);               /* thick structural rules */
   --mark: var(--c-mustard);           /* the active filter, deals, notices */
@@ -105,7 +109,7 @@
   --fs-l: 20px;
   --fs-xl: 28px;
   --fs-2xl: 40px;
-  --fs-total: 52px;
+  --fs-total: 22px;                   /* the sale total: just above the 16px subtotal */
 
   /* space, size and rules */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
@@ -132,6 +136,7 @@
   --tile: var(--c-ground);
   --tile-on: var(--c-ground-2);
   --hair: var(--c-line-dark);
+  --stripe: #122438;
   --edge: var(--c-muted-dark);
   --rule: var(--c-cream);
   --mark: var(--c-mustard);

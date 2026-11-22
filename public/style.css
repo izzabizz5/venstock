@@ -35,11 +35,13 @@ header {
   font-size: 22px; font-weight: 900; font-stretch: var(--wide); letter-spacing: -.01em; text-transform: uppercase;
   white-space: nowrap;
 }
+/* the running show's name: wraps to a second line rather than being cut off */
 #showName {
-  align-self: stretch; display: flex; align-items: center; min-width: 0; padding-left: var(--s4);
+  align-self: stretch; display: flex; align-items: center; min-width: 120px; max-width: 320px; padding-left: var(--s4);
   border-left: var(--edge-w) solid var(--on-band); color: var(--on-band);
-  font: 700 17px/1.1 var(--font-serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font: 700 16px/1.15 var(--font-serif); overflow: hidden; overflow-wrap: anywhere;
 }
+.brand { flex: none; min-width: 0; }
 #tabs { display: flex; margin-left: auto; }
 #tabs button {
   min-width: var(--tap); padding: 0 18px; border: 0; background: none; color: var(--on-band); font-size: var(--fs-label);
@@ -150,7 +152,7 @@ header {
 .totals { font-variant-numeric: tabular-nums lining-nums; }
 .trow { display: flex; justify-content: space-between; gap: var(--s3); padding: 2px 0; }
 .trow.grand {
-  align-items: baseline; margin-top: var(--s3); padding-top: var(--s3); border-top: var(--rule-w) solid currentColor;
+  align-items: baseline; margin-top: var(--s2); padding-top: var(--s2); border-top: 3px solid currentColor;
 }
 .trow.grand span:first-child { font-size: var(--fs-label); font-weight: 700; font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase; }
 .trow.grand span:last-child { font-size: var(--fs-total); font-weight: 900; font-stretch: var(--wide); letter-spacing: -.02em; line-height: 1; }
@@ -355,6 +357,9 @@ body[data-screen="items"] h3 { margin-top: var(--s4); padding-top: var(--s4); bo
 .item-row .row:first-child { flex: 3 1 420px; }
 .item-row .row:last-child { flex: 2 1 340px; }
 .item-row label { font-size: var(--fs-s); font-weight: 600; }
+/* every other row on a slightly darker ground, so long lists are easier to follow across */
+#itemList .item-row { padding-left: var(--s3); padding-right: var(--s3); }
+#itemList .item-row:nth-child(even) { background: var(--stripe); }
 
 /* ---------- shows ---------- */
 /* the running show: the deep-blue money field */
@@ -443,12 +448,22 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
 #supportLink button.sm { min-height: 56px; padding: 0 var(--s5); background: var(--action); color: var(--on-action); border-color: var(--action-edge); }
 
 /* ---------- small laptops / tablets ---------- */
+/* ---------- tablets and small laptops: compact tabs so the header fits on one line ---------- */
+@media (max-width: 1200px) {
+  #tabs button { padding: 0 12px; font-stretch: 100%; letter-spacing: .08em; }
+  #sync { padding: 0 var(--s3); font-stretch: 100%; letter-spacing: .08em; }
+  #themeToggle { padding: 0 var(--s3); font-stretch: 100%; letter-spacing: .08em; }
+}
 @media (max-width: 1000px) {
   :root { --panel-w: 340px; }
+  .brand { padding: 0 var(--s4); }
+  .brand strong { font-size: 18px; }
   .catalog { padding: var(--s4); }
   .order { padding: var(--s4); }
+  .order-head { gap: var(--s2); }
+  .order-head h2 { font-size: 22px; margin-right: auto; }
+  #register { min-width: 0; max-width: 150px; font-stretch: 100%; letter-spacing: .04em; }
   .products { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
-  .trow.grand span:last-child { font-size: 42px; }
   #showName { display: none; }
 }
 
@@ -474,9 +489,8 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
   .catalog { padding: var(--s3); }
   .toolbar { gap: var(--s2); margin-bottom: var(--s3); }
   .restock-btn { padding: 0 var(--s3); }
-  .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--s3)) var(--s3); padding: 0 var(--s3) 2px; scrollbar-width: none; }
-  .chips::-webkit-scrollbar { display: none; }
-  .chip { flex: none; }
+  .chips { margin-bottom: var(--s3); } /* categories wrap onto more rows: nothing hidden off-screen */
+  .chip { padding: 0 14px; }
   .products { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .product { min-height: 120px; padding: var(--s3); }
   .product .price { font-size: 20px; }
@@ -494,10 +508,9 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
   }
   .order-head { gap: var(--s2); }
   .order-head h2 { font-size: 22px; margin-right: auto; }
-  #register { min-width: 0; max-width: 40vw; font-stretch: 100%; letter-spacing: .04em; }
+  #register { max-width: 40vw; }
   .lines { flex: none; min-height: 0; max-height: 34vh; }
   .empty-cart { margin: var(--s3) 0; }
-  .trow.grand span:last-child { font-size: 44px; }
   .sheet-backdrop {
     display: block; position: fixed; inset: 0; z-index: 35; border: 0; padding: 0; background: var(--scrim);
     opacity: 0; pointer-events: none; transition: opacity .2s;
