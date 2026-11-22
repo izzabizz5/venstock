@@ -8,10 +8,11 @@ Commands marked "remote" talk to your Cloudflare account. The scripts in `script
 named `venstock-dev-control` and `venstock-dev-t<id>` (enforced in `scripts/lib/d1-target.mjs`).
 
 ## 1. Decisions
-- [ ] **The vendor domain (`BASE_DOMAIN`).** A registrable domain used for nothing but vendor shops
-  (`<slug>.<domain>`) and the staff site (`admin.<domain>`). Every subdomain of it is "same-site" with every
-  other, so nothing else may ever live on it (see 11). Marketing, docs, status and support pages go on a different
-  registrable domain (e.g. `site.example` for the website, `shops.example` for vendors).
+- [ ] **The vendor domain (`BASE_DOMAIN`).** A registrable domain for vendor shops (`<slug>.<domain>`), the staff
+  site (`admin.<domain>`) and, at the apex only, Venstock's own public site (marketing and sign-up; see 6 and 11).
+  Every subdomain of it is "same-site" with every other, so nothing else may ever live on it (see 11):
+  `www.<domain>` only redirects to the apex, and docs, status and support pages from other providers go on a
+  different registrable domain.
 - [ ] **Database names.** The scripts allow only `venstock-dev-control` and `venstock-dev-t<id>`. Either launch on
   those names, or change the rule in `scripts/lib/d1-target.mjs` (`ALLOWED_REMOTE`), its tests and CLAUDE.md
   first, as a deliberate change. Write down which: ____________
@@ -21,9 +22,22 @@ named `venstock-dev-control` and `venstock-dev-t<id>` (enforced in `scripts/lib/
 - [ ] **Workers Paid plan** on the account. Free allows 10 D1 databases in total (one per vendor plus control) and
   50 queries per request; Paid includes 100,000 databases. About 5,000 database bindings fit in one Worker.
 - [ ] **The domain is a zone in this Cloudflare account** (nameservers pointed at Cloudflare, zone active).
+- [ ] **The Cloudflare login and the registrar contact use an email address that is NOT on the vendor domain**
+  (not `@venstock.org`). If the domain's email ever breaks, or the domain lapses, the account that can fix it must
+  still be reachable.
 - [ ] **Wildcard DNS:** a proxied (orange cloud) record for `*`, e.g. `AAAA * 100::`. It needs no origin: the
-  Worker answers everything. Add no other records under the domain (see 11).
-- [ ] **No apex or other subdomain records** pointing at anything else. The apex can stay unused.
+  Worker answers everything, `www` included (a 301 to the apex).
+- [ ] **Apex DNS:** a proxied record for the apex, e.g. `AAAA @ 100::`, for the public site's Worker (route
+  `venstock.org/*`; see 6). No origin; until that Worker is deployed the apex answers nothing.
+- [ ] **Email (Zoho Mail), the only other records allowed:**
+  - `MX` at the apex (Zoho's mail servers, with their priorities);
+  - `TXT` at the apex: SPF (`v=spf1 include:… ~all`, exactly as Zoho's setup page shows it) and Zoho's domain verification;
+  - `TXT` at `<selector>._domainkey`: DKIM (the selector and key Zoho shows);
+  - `TXT` at `_dmarc`: DMARC (e.g. `v=DMARC1; p=quarantine; rua=mailto:<an address you read>`).
+  **Verify the domain with the TXT method, never CNAME.** A CNAME such as `zb12345678.venstock.org → zmverify.zoho.com`
+  is an ordinary one-level subdomain: it would take that name away from the Worker's wildcard and hand it to a
+  third-party host (see 11). If Zoho only offers a CNAME, stop and choose another way.
+- [ ] **Nothing else.** No other apex or subdomain records, and none pointing at a third-party host.
 
 ## 3. The repo's production settings (you edit, then commit)
 - [ ] In `wrangler.toml` `[vars]`: `BASE_DOMAIN = "<your domain>"`. (Local development is unaffected: local configs
@@ -64,6 +78,10 @@ These don't exist yet. Each needs code, tests and review (ask Claude to build th
 - [ ] **Error visibility:** turn on Workers Logs (an `[observability]` block in the generated deploy config, which
   `scripts/lib/wrangler-config.mjs` doesn't write yet) and set up an alert on repeated 5xx responses. Server errors
   are logged with method, path and vendor id, never request bodies.
+- [ ] **The public site at the apex:** Venstock's marketing and sign-up pages, as a SEPARATE Worker in this repo:
+  `site/` with its own `wrangler.toml`, static assets only, no D1 bindings, route `venstock.org/*`, never the vendor
+  Worker. Its pages load no third-party scripts or embeds, send a strict `Content-Security-Policy` (only its own
+  files), and set no cookies (see 11).
 
 ## 7. Drill: a remote migration that fails halfway keeps nothing
 Locally, a failing migration file is rolled back completely (`tests/migrate.test.mjs`). Cloudflare documents the
@@ -178,10 +196,14 @@ cd / && rm -rf /tmp/venstock-drill
   The migration checksums recorded at that tag can never change afterwards; the tests and `release.mjs` enforce it.
 
 ## 11. Rules that hold after launch
-- **Nothing else lives on the vendor domain.** Never point any subdomain, or the apex, at a third-party host (status
-  pages, docs platforms, site builders, email tracking links, URL shorteners) or anything other people can edit.
-  The only DNS records are the wildcard to the Worker and what Cloudflare itself needs. Check the DNS list after any
-  change.
+- **Nothing else lives on the vendor domain.** Every subdomain is served by the vendor Worker (`www` only redirects
+  to the apex). The apex serves only Venstock's own static public site (`site/`, a separate Worker): no
+  third-party scripts or embeds, a strict `Content-Security-Policy`, and no cookies. Never point any subdomain, or
+  the apex, at a third-party host (status pages, docs platforms, site builders, email tracking links, URL
+  shorteners) or anything other people can edit.
+  The only DNS records are the wildcard and apex records for the Workers, Zoho Mail's records (MX at the apex;
+  SPF, verification and DMARC as TXT; DKIM as TXT at `<selector>._domainkey`; never a CNAME), and what Cloudflare
+  itself needs. Check the DNS list after any change.
 - **Registry changes take up to 45 seconds.** The Worker caches each subdomain's registry entry for 45 seconds per
   isolate, unknown ones included. A new vendor can show "Not found" for up to 45 seconds after setup (on top of the
   deploy it needs), and a suspension can take up to 45 seconds to apply everywhere.

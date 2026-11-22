@@ -142,3 +142,18 @@ Restoring to that bookmark is exact: `npx wrangler d1 time-travel restore vensto
 - Someone leaves, or a laptop is lost: `node scripts/create-platform-admin.mjs --disable person@yourcompany.example
   --remote`. Their login, sessions and any open support sessions stop at once, and the audit log records it. Remove
   them from the Access policy too. Running the script again without `--disable` re-enables them with a new invite.
+
+## The vendor domain: DNS, email and the public site
+Every subdomain of the vendor domain is "same-site" with every vendor's shop, so the DNS list stays short and
+first-party. Check it after any change (rules: `docs/before-first-vendor.md`, section 11).
+- **Allowed records:** the proxied wildcard `*` (the vendor Worker; `www` answers a 301 to the apex), the proxied
+  apex record (the public site's Worker, `site/`, route `venstock.org/*`), and Zoho Mail's records: `MX` at the
+  apex; SPF, domain verification and DMARC (`_dmarc`) as `TXT`; DKIM as `TXT` at `<selector>._domainkey`.
+- **Email verification is TXT, never CNAME.** A CNAME at a one-level name (e.g. `zb12345678.venstock.org`) takes
+  that name away from the vendor Worker and hands it to a third-party host. Changing mail providers, or adding a
+  sending service: only TXT/MX records, and the same check.
+- **Never** point any subdomain, or the apex, at a third-party host or anything other people can edit.
+- **The public site** (apex) is static files only: no third-party scripts or embeds, a strict
+  `Content-Security-Policy`, no cookies, no D1 bindings. It is a separate Worker and never the vendor Worker.
+- **Account recovery:** the Cloudflare login and the registrar contact use an address that is not on the vendor
+  domain, so a mail or domain problem can't lock you out of fixing it.
