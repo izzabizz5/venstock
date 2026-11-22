@@ -1,0 +1,22 @@
+# Venstock's public site at the apex (venstock.org): a SEPARATE Worker that only serves static files from
+# site/public. No code (no `main`), no bindings, no cookies, no third-party anything. Rules: CLAUDE.md and
+# docs/before-first-vendor.md section 11. Checked by tests/site.unit.test.mjs.
+#
+# Deploying it is yours, never Claude's: from site/, `npx wrangler deploy` (only once the vendor Worker's
+# wildcard route is live and section 11 of the launch checklist holds).
+name = "venstock-site"
+compatibility_date = "2024-11-01"
+workers_dev = false
+preview_urls = false
+
+[assets]
+directory = "public"
+not_found_handling = "404-page"
+
+# The apex only. Every subdomain (*.venstock.org) belongs to the vendor Worker; www redirects there.
+[[routes]]
+pattern = "venstock.org/*"
+zone_name = "venstock.org"
+
+[dev]
+port = 8790

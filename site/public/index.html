@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#8CB9CE">
+  <!-- TODO: your wording for the description search engines show. -->
+  <meta name="description" content="Venstock: a point of sale and stock tracker for vendor shows. Cash, Venmo and Zelle; keeps working without signal.">
+  <title>Venstock</title>
+  <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/site.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <div class="wrap">
+      <a class="mark" href="/">Venstock</a>
+      <nav class="label" aria-label="Sections">
+        <a href="#what">What it is</a>
+        <a href="#how">How it works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#join">Join</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="open" aria-labelledby="title">
+      <div class="open-words">
+        <!-- TODO: your headline and opening line. These say only what the app does. -->
+        <h1 id="title">Sell at the show. Count what's left.</h1>
+        <p>Venstock is a point of sale and stock tracker for vendors at markets, fairs and pop-ups. It runs on the phone
+          you already have, and keeps ringing up sales when the signal drops.</p>
+      </div>
+      <!-- The product's own order panel, drawn in HTML (no image): what a sale looks like in the app. -->
+      <div class="open-panel" aria-hidden="true">
+        <div class="sample">
+          <div class="sample-head"><b>This sale</b><span class="label">Register 1</span></div>
+          <div class="sample-row"><span>Print, 8x10</span><span class="num">$25.00</span></div>
+          <div class="sample-row"><span>3 × sticker</span><span class="num">$12.00</span></div>
+          <div class="sample-row"><span>Tee, M</span><span class="num">$32.00</span></div>
+          <div class="sample-deal"><span>Bundle deal</span><span class="num">−$2.00</span></div>
+          <div class="sample-total"><span class="label">Total</span><span class="num">$67.00</span></div>
+          <div class="sample-go label">Complete sale</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="what" aria-labelledby="what-h">
+      <div class="wrap">
+        <h2 id="what-h">What it is</h2>
+        <ul class="facts">
+          <li><b>Keeps selling offline</b><span>Sales are saved on the phone and upload by themselves when the signal comes back.</span></li>
+          <li><b>Cash, Venmo and Zelle</b><span>Records how each sale was paid and works out the change. The money itself goes the way it always does.</span></li>
+          <li><b>Stock that counts down</b><span>Every sale takes its items off your stock. Restock from the till, or import your spreadsheet.</span></li>
+          <li><b>Deals and discounts</b><span>Bundle deals apply by themselves; add a percent or dollar discount at checkout.</span></li>
+          <li><b>Several registers at once</b><span>Two or more phones can sell at the same show; stock stays shared.</span></li>
+          <li><b>Totals for every show</b><span>By payment, by register and best sellers, with a spreadsheet download.</span></li>
+          <li><b>Your own address</b><span><span class="num">yourshop.venstock.org</span>, with invite-only logins and a 6-digit code from an authenticator app.</span></li>
+          <li><b>We only look when you need help</b><span>Venstock staff can open your shop read-only, for at most 30 minutes, with a reason, and you see every visit.</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="how" aria-labelledby="how-h">
+      <div class="wrap">
+        <h2 id="how-h">How it works</h2>
+        <!-- TODO: check these steps match how you onboard vendors. -->
+        <ol class="steps">
+          <li><span>Pay the setup fee and tell us your shop's name.</span></li>
+          <li><span>We set up your shop at <span class="num">yourshop.venstock.org</span> and send you an invite link.</span></li>
+          <li><span>Set your password and authenticator code, then add your items or import a spreadsheet.</span></li>
+          <li><span>Open it on your phone at the show and start selling.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section price" id="pricing" aria-labelledby="pricing-h">
+      <div class="wrap">
+        <h2 id="pricing-h">Pricing</h2>
+        <div>
+          <div class="price-figures">
+            <div><span class="num">$50</span><span class="label">Setup, once</span></div>
+            <!-- TODO: the monthly price. -->
+            <div><span class="num">$<span class="todo">TODO</span></span><span class="label">Every month</span></div>
+          </div>
+          <!-- TODO: what the monthly price includes, how billing and cancelling work. -->
+          <p><span class="todo">TODO</span> What the monthly price includes, and how billing and cancelling work.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section join" id="join" aria-labelledby="join-h">
+      <div class="wrap">
+        <h2 id="join-h">Join</h2>
+        <div class="join-actions">
+          <!-- TODO: replace href="#join" with your Stripe payment link (https://buy.stripe.com/...). -->
+          <a class="button" href="#join">Pay the $50 setup fee</a>
+          <!-- TODO: replace TODO-contact@venstock.org with your real address. -->
+          <p>Questions first? Email <a href="mailto:TODO-contact@venstock.org">TODO-contact@venstock.org</a>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p>Venstock is provided by Medein LLC.</p>
+      <nav aria-label="Legal"><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a></nav>
+    </div>
+  </footer>
+</body>
+</html>
