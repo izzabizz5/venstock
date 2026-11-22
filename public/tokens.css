@@ -19,6 +19,7 @@
    @pair --on-mark on --mark body
    @pair --on-action on --action body
    @pair --invert-fg on --invert-bg body
+   @pair --on-alert on --alert-bg body
    @pair --on-panel on --panel-2 body
    @pair --edge on --page ui
    @pair --edge on --surface ui
@@ -85,6 +86,8 @@
   --danger: var(--c-brick);
   --invert-bg: var(--c-ink);          /* the current tab, badges, the toast, warnings in the header */
   --invert-fg: var(--c-cream);
+  --alert-bg: var(--c-brick);         /* failed sales: always with words */
+  --on-alert: var(--c-cream);
   --scrim: rgba(16, 38, 61, .55);     /* flat tint behind popups: no blur */
   --focus: var(--c-ink);
   --focus-on-panel: var(--c-cream);
@@ -138,6 +141,8 @@
   --danger: var(--c-brick-dark);
   --invert-bg: var(--c-cream);
   --invert-fg: var(--c-ink);
+  --alert-bg: var(--c-brick-dark);
+  --on-alert: var(--c-ink);
   --scrim: rgba(0, 0, 0, .6);
   --focus: var(--c-cream);
   --focus-on-panel: var(--c-cream);

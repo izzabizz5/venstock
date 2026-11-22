@@ -18,9 +18,7 @@ input, select, textarea { background: var(--page); color: var(--text); }
 h1, h2, h3 { font-family: var(--font-serif); font-weight: 700; line-height: 1.1; }
 .muted { color: var(--text-2); font-size: var(--fs-s); }
 .danger { color: var(--danger); }
-.warn { color: var(--danger); font-weight: 600; }
 .center { text-align: center; }
-.grow { flex: 1; }
 /* wide, bold, tracked uppercase: labels, navigation, buttons */
 .label, #tabs button, .chip, .restock-btn, .complete, .paytoggle button, .cart-bar, #themeToggle, #sync, button.sm, th {
   font-weight: 700; font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase;
@@ -257,53 +255,137 @@ details summary { cursor: pointer; min-height: var(--tap); display: flex; align-
   font: 600 17px var(--font-sans); letter-spacing: .12em; font-variant-numeric: tabular-nums; word-break: break-all; user-select: all;
 }
 
-/* ---------- screens restyled in the next stages (baseline: tokens only, no radius, no shadow) ---------- */
-.page { max-width: 880px; margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); }
-.card { padding: var(--s4) 0; margin: 0; border-bottom: var(--hair-w) solid var(--hair); }
-.row { display: flex; align-items: center; gap: var(--s2); margin: var(--s2) 0; }
+/* ---------- pages (sales, items, shows, account): ruled sections, hairline rows, no boxes ---------- */
+.page { max-width: 960px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+/* a section: thick rule above, serif heading; rows inside are separated by hairlines */
+.card { margin: 0 0 var(--s6); padding: var(--s4) 0 0; border-top: var(--rule-w) solid var(--rule); }
+.card > strong:first-child { display: block; margin-bottom: var(--s2); font: 700 26px/1.15 var(--font-serif); }
+.card p { max-width: 68ch; }
+.row { display: flex; align-items: center; gap: var(--s2) var(--s3); margin: var(--s3) 0; }
 .row.wrap { flex-wrap: wrap; }
 .row .grow { flex: 1; }
-.note { margin-top: var(--s2); font-size: var(--fs-s); padding-left: var(--s3); border-left: var(--rule-w) solid var(--hair); }
+.note { margin-top: var(--s2); padding-left: var(--s3); border-left: var(--rule-w) solid var(--mark); font-size: var(--fs-s); }
+h3 { margin: var(--s6) 0 var(--s2); font-size: var(--fs-xl); }
+
 button.sm {
-  min-height: var(--tap); padding: 0 var(--s4); border: var(--edge-w) solid var(--edge); background: none; color: var(--text); font-size: 11px;
+  display: inline-flex; align-items: center; justify-content: center; min-height: var(--tap); padding: 0 var(--s4);
+  border: var(--edge-w) solid var(--edge); background: var(--page); color: var(--text); font-size: 11px; white-space: nowrap;
 }
 button.sm.danger { color: var(--danger); }
 button.sm.go { background: var(--action); color: var(--on-action); border-color: var(--action-edge); }
-button.sm:disabled { opacity: .5; }
+button.sm:disabled { opacity: .5; cursor: default; }
+a:has(> button.sm) { text-decoration: none; }
+/* buttons repeated on every row are dark, so orange stays one main action per section */
+.up-row button.sm.go { background: var(--invert-bg); color: var(--invert-fg); border-color: var(--invert-bg); }
+.item-row button.sm.go { background: var(--page); color: var(--text); border-color: var(--edge); }
+
 .page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), .page select, .page textarea {
-  min-height: var(--tap); padding: 0 var(--s3); border: var(--edge-w) solid var(--edge); min-width: 0;
+  min-height: var(--tap); padding: 0 var(--s3); border: var(--edge-w) solid var(--edge); background: var(--page); min-width: 0;
 }
-input.name { flex: 2 1 180px; }
-input.mid { flex: 1 1 120px; }
-input.num { width: 96px; }
+.page label { display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--tap); }
+input.name { flex: 2 1 200px; }
+input.mid { flex: 1 1 130px; }
+input.num { width: 100px; font-variant-numeric: tabular-nums; }
 input.full { width: 100%; }
+/* square checkboxes and radio buttons (no circles): the chosen one is filled, with a gap */
+input[type="checkbox"], input[type="radio"] {
+  appearance: none; -webkit-appearance: none; flex: none; width: 26px; height: 26px; margin: 0; border: var(--edge-w) solid var(--edge);
+  background: var(--page); cursor: pointer; vertical-align: middle;
+}
+input[type="checkbox"]:checked, input[type="radio"]:checked { background: var(--text); box-shadow: inset 0 0 0 4px var(--page); }
+input[type="file"] { max-width: 100%; font-size: var(--fs-s); }
+input[type="file"]::file-selector-button {
+  min-height: var(--tap); margin-right: var(--s3); padding: 0 var(--s4); border: var(--edge-w) solid var(--edge); background: var(--page); color: var(--text);
+  font: 700 11px var(--font-sans); font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase; cursor: pointer;
+}
 .pill {
-  display: inline-block; padding: 2px var(--s2); background: var(--mark); color: var(--on-mark); white-space: nowrap;
+  display: inline-block; padding: 3px var(--s2); background: var(--mark); color: var(--on-mark); white-space: nowrap; vertical-align: middle;
   font-size: 11px; font-weight: 700; font-stretch: var(--wide); letter-spacing: .1em; text-transform: uppercase;
 }
 .pill.gray { background: var(--hair); color: var(--text); }
-.void .grow, .void .muted { text-decoration: line-through; color: var(--text-2); }
-h3 { margin: var(--s5) 0 var(--s2); font-size: var(--fs-l); }
-.preview { margin-top: var(--s3); border-top: var(--hair-w) solid var(--hair); padding-top: var(--s2); }
+.preview { margin-top: var(--s4); padding-top: var(--s3); border-top: var(--hair-w) solid var(--hair); }
 .table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: var(--fs-s); font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: var(--s2); border-bottom: var(--hair-w) solid var(--hair); white-space: nowrap; }
+table { border-collapse: collapse; width: 100%; font-size: var(--fs-s); font-variant-numeric: tabular-nums; border-top: var(--rule-w) solid var(--rule); }
+th, td { text-align: left; padding: var(--s2) var(--s3); border-bottom: var(--hair-w) solid var(--hair); white-space: nowrap; }
 th { font-size: 11px; color: var(--text); border-bottom: var(--edge-w) solid var(--rule); }
+
+/* ---------- sales ---------- */
+body[data-screen="sales"] .page > .chips { margin-bottom: var(--s5); }
+/* each sale is a hairline row */
+body[data-screen="sales"] .card { margin: 0; padding: var(--s3) 0; border-top: 0; border-bottom: var(--hair-w) solid var(--hair); }
+body[data-screen="sales"] .card .row { margin: 0 0 var(--s1); }
+body[data-screen="sales"] .card .muted { font-variant-numeric: tabular-nums; }
+/* the running total: the deep-blue money field */
+body[data-screen="sales"] .card:has(> strong:only-child) {
+  margin: 0 0 var(--s4); padding: var(--s5); border: 0; background: var(--panel); color: var(--on-panel);
+}
+body[data-screen="sales"] .card:has(> strong:only-child) > strong {
+  margin: 0; font: 900 32px/1.1 var(--font-sans); font-stretch: var(--wide); letter-spacing: -.01em; font-variant-numeric: tabular-nums;
+}
+.void .grow, .void .muted { text-decoration: line-through; color: var(--text-2); }
+/* sales the server refused (400/422): kept on the device until someone deals with them */
+body[data-screen="sales"] .card.failed { padding-left: var(--s4); border-left: var(--rule-w) solid var(--danger); }
+body[data-screen="sales"] .card.failed:has(> strong:first-child) {
+  margin-bottom: var(--hair-w); padding: var(--s5); border: 0; background: var(--alert-bg); color: var(--on-alert);
+}
+.card.failed:has(> strong:first-child) .muted { color: var(--on-alert); }
+.card.failed:has(> strong:first-child) button.sm { background: none; color: var(--on-alert); border-color: var(--on-alert); }
+.card.failed .reason { margin-top: var(--s1); color: var(--danger); font-weight: 600; }
+
+/* ---------- items ---------- */
+/* settings sit two by two on wide screens; the import and add sections and the item list span the width */
+body[data-screen="items"] .page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--s6); max-width: 1120px; }
+body[data-screen="items"] .page > :not(.card), body[data-screen="items"] .card:has(#csvFile), body[data-screen="items"] .card:has(#newName) { grid-column: 1 / -1; }
+body[data-screen="items"] .page > datalist { display: none; }
+/* bundle deals: a mustard field */
+.card:has(#dealRows) { align-self: start; padding: var(--s4) var(--s5) var(--s3); border-top: 0; background: var(--mark); color: var(--on-mark); }
+.card:has(#dealRows) .muted { color: var(--on-mark); }
+.card:has(#dealRows) .sm:not(.go) { background: none; color: var(--on-mark); border-color: var(--on-mark); }
+.deal-row { padding: var(--s1) 0; border-bottom: var(--hair-w) solid var(--on-mark); }
+.card:has(#regCount) { align-self: start; }
+.warn { color: var(--danger); font-weight: 600; }
+body[data-screen="items"] h3 { margin-top: var(--s4); padding-top: var(--s4); border-top: var(--rule-w) solid var(--rule); }
+#itemSearch { margin: var(--s2) 0 var(--s3); }
+/* one item per hairline row: its fields on one line where there is room */
+.card.item-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 var(--s3); margin: 0; padding: var(--s2) 0;
+  border-top: 0; border-bottom: var(--hair-w) solid var(--hair);
+}
+.item-row .row { margin: var(--s1) 0; }
+.item-row .row:first-child { flex: 3 1 420px; }
+.item-row .row:last-child { flex: 2 1 340px; }
+.item-row label { font-size: var(--fs-s); font-weight: 600; }
+
+/* ---------- shows ---------- */
+/* the running show: the deep-blue money field */
+.card:has([data-endshow]) { padding: var(--s5); border: 0; background: var(--panel); color: var(--on-panel); }
+.card:has([data-endshow]) :focus-visible { outline-color: var(--focus-on-panel); }
+.card:has([data-endshow]) > strong:first-child { font-size: var(--fs-xl); margin-bottom: var(--s4); }
+.card:has([data-endshow]) .row { margin: 0; padding: var(--s2) 0; border-bottom: var(--hair-w) solid var(--panel-hair); font-variant-numeric: tabular-nums; }
+.card:has([data-endshow]) .row b { font-size: 22px; font-weight: 800; }
+.card:has([data-endshow]) .muted { color: var(--on-panel); }
+.card:has([data-endshow]) h3 { margin: var(--s5) 0 var(--s1); font-size: var(--fs-l); }
+.card:has([data-endshow]) button.sm { background: none; color: var(--on-panel); border-color: var(--on-panel); }
+.card:has([data-endshow]) p:last-child { display: flex; flex-wrap: wrap; gap: var(--s2); margin: var(--s5) 0 0; }
+.up-row { margin: 0; padding: var(--s3) 0; border-bottom: var(--hair-w) solid var(--hair); }
+.up-row .muted { font-variant-numeric: tabular-nums; }
+.up-row.editing { background: var(--tile-on); padding: var(--s3); }
+.up-row .pill { margin-left: var(--s2); }
+.up-form { margin-top: var(--s4); padding: var(--s4) 0 0; }
+.up-form .label { margin-bottom: 0; }
+/* past shows: hairline rows */
+body[data-screen="shows"] .card.row { margin: 0; padding: var(--s3) 0; border-top: 0; border-bottom: var(--hair-w) solid var(--hair); }
+body[data-screen="shows"] .page > p:last-child { margin-top: var(--s5); }
+
+/* ---------- account and support (restyled in the next stage) ---------- */
 .stack { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s2); max-width: 360px; }
 .stack button { align-self: flex-start; }
 .invite { margin: var(--s2) 0; padding: var(--s3) var(--s4); background: var(--mark); color: var(--on-mark); }
 .invite p { margin: 0 0 var(--s2); }
 .user-row { padding-top: var(--s2); border-top: var(--hair-w) solid var(--hair); }
 .add-user { margin-top: var(--s3); padding-top: var(--s3); border-top: var(--hair-w) solid var(--hair); }
-.up-row { padding-top: var(--s2); border-top: var(--hair-w) solid var(--hair); }
-.up-row.editing { background: var(--tile-on); padding: var(--s2); }
-.up-row .pill { margin-left: var(--s1); }
-.up-form { margin-top: var(--s3); padding-top: var(--s3); border-top: var(--hair-w) solid var(--hair); }
-.up-form label { display: flex; align-items: center; gap: 6px; }
-.notice .sm { margin-left: 6px; border-color: var(--on-mark); color: var(--on-mark); }
-/* sales the server refused (400/422): kept on the device until someone deals with them */
-.card.failed { padding-left: var(--s3); border-left: var(--rule-w) solid var(--danger); }
-.card.failed .reason { color: var(--danger); font-size: var(--fs-s); margin-top: var(--s1); }
+.notice .sm { margin-left: 6px; border-color: var(--on-mark); color: var(--on-mark); background: none; }
+.notice .sm.go { background: var(--action); color: var(--on-action); border-color: var(--action-edge); }
 /* a Venstock support session (read-only) on a vendor's site */
 .support-banner {
   position: sticky; top: 0; z-index: 50; padding: var(--s2) var(--s3); background: var(--mark); color: var(--on-mark);
@@ -388,6 +470,13 @@ th { font-size: 11px; color: var(--text); border-bottom: var(--edge-w) solid var
     max-width: none; max-height: 92vh; border-width: var(--rule-w) 0 0; padding: var(--s4) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));
   }
   .page { padding: var(--s4) var(--s3) var(--s6); }
+  body[data-screen="items"] .page { grid-template-columns: minmax(0, 1fr); }
+  .card > strong:first-child { font-size: 22px; }
+  body[data-screen="sales"] .card:has(> strong:only-child) { padding: var(--s4); }
+  body[data-screen="sales"] .card:has(> strong:only-child) > strong { font-size: 22px; }
+  .card:has(#dealRows), .card:has([data-endshow]) { padding: var(--s4); }
+  .item-row .row:first-child, .item-row .row:last-child { flex-basis: 100%; }
+  h3 { font-size: 22px; }
   #toast { bottom: calc(132px + env(safe-area-inset-bottom)); }
 
   .auth { grid-template-columns: 1fr; min-height: 0; }
