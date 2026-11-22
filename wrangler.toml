@@ -16,9 +16,11 @@ port = 8788
 # BASE_DOMAIN here is the PRODUCTION vendor domain. Local configs always use "localhost" (<slug>.localhost:8788), so
 # this value only matters for deploys. Every remote command refuses until it is a real domain AND a wildcard route
 # for it exists below (you set both, not Claude; see docs/before-first-vendor.md):
-#   [[routes]]
-#   pattern = "*.venstock.org/*"
-#   zone_name = "venstock.org"
+
+[[routes]]
+pattern = "*.venstock.org/*"
+zone_name = "venstock.org"
+
 [vars]
 BASE_DOMAIN = "venstock.org"
 
@@ -26,6 +28,6 @@ BASE_DOMAIN = "venstock.org"
 # scripts write them into .wrangler-generated/ from the registry. Remote name must stay venstock-dev-control; set
 # database_id after creating it (you, not Claude).
 [[d1_databases]]
-binding = "venstock-dev-control"
+binding = "CONTROL"
 database_name = "venstock-dev-control"
 database_id = "6001083c-18ca-4c72-a083-908292b4d05b"

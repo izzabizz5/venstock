@@ -15,8 +15,8 @@ named `venstock-dev-control` and `venstock-dev-t<id>` (enforced in `scripts/lib/
   different registrable domain.
 - [ ] **Database names.** The scripts allow only `venstock-dev-control` and `venstock-dev-t<id>`. Either launch on
   those names, or change the rule in `scripts/lib/d1-target.mjs` (`ALLOWED_REMOTE`), its tests and CLAUDE.md
-  first, as a deliberate change. Write down which: ____________
-- [ ] **Retention for deleted vendors** (see 9): how long to keep a deleted vendor's export: ______ days.
+  first, as a deliberate change. Write down which: _venstock-dev-_
+- [ ] **Retention for deleted vendors** (see 9): how long to keep a deleted vendor's export: _30_ days.
 
 ## 2. Cloudflare account and domain
 - [ ] **Workers Paid plan** on the account. Free allows 10 D1 databases in total (one per vendor plus control) and
