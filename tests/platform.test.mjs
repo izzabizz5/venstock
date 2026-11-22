@@ -43,7 +43,8 @@ test("platform login: password then 6-digit code; the cookie is __Host-pos_platf
   assert.equal(pw.status, 200);
   const [set] = [].concat(pw.headers["set-cookie"]);
   assert.match(set, /^__Host-pos_platform=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Strict; Max-Age=\d+$/);
-  await admin.login(PLATFORM_ADMIN);
+  const full = await admin.login(PLATFORM_ADMIN);
+  assert.match([].concat(full.headers["set-cookie"])[0], /; Max-Age=43200$/, "a staff login lasts 12 hours, not a vendor's 30 days");
   const me = await admin.get("/api/auth/me");
   assert.deepEqual(me.json, { email: PLATFORM_ADMIN.email, is_admin: true, stage: "ok" });
   assert.equal(server.query("CONTROL", "SELECT count(*) AS n FROM platform_sessions")[0].n > 0, true);
@@ -208,4 +209,27 @@ test("the audit log can only grow: rows can't be changed or removed", async () =
   assert.throws(() => server.query("CONTROL", "UPDATE audit_log SET detail = 'rewritten'"), /append-only/);
   assert.throws(() => server.query("CONTROL", "DELETE FROM audit_log"), /append-only/);
   assert.equal(server.query("CONTROL", "SELECT count(*) AS n FROM audit_log WHERE detail = 'rewritten'")[0].n, 0);
+});
+
+// ---------- a disabled staff account ----------
+test("a disabled staff account stops at once: no login, no session, no support session", async () => {
+  unlock();
+  const staff = server.client("admin.localhost");
+  await staff.login(LOCKME);
+  const r = await staff.post("/api/platform/support", { slug: "demo", reason: "Checking a disabled-account case" });
+  assert.equal(r.status, 200);
+  const enter = await at("demo.localhost", "/api/support/enter", { method: "POST", body: { code: new URL(r.json.url).hash.slice("#support=".length) } });
+  const cookie = [].concat(enter.headers["set-cookie"])[0].split(";")[0];
+  assert.equal((await at("demo.localhost", "/api/items", { headers: { cookie } })).status, 200);
+  const unused = await staff.post("/api/platform/support", { slug: "demo", reason: "A link that is never opened" });
+
+  server.query("CONTROL", `UPDATE platform_admins SET disabled_at = '2026-11-21T00:00:00Z' WHERE email = '${LOCKME.email}'`);
+  assert.equal((await staff.get("/api/auth/me")).status, 401, "the platform session stops");
+  assert.equal((await at("demo.localhost", "/api/items", { headers: { cookie } })).status, 401, "the support session stops");
+  const code = new URL(unused.json.url).hash.slice("#support=".length);
+  assert.equal((await at("demo.localhost", "/api/support/enter", { method: "POST", body: { code } })).status, 400, "an unused link stops");
+  const login = await staff.post("/api/auth/login", { email: LOCKME.email, password: LOCKME.password });
+  const unknown = await staff.post("/api/auth/login", { email: "nobody@venstock.test", password: LOCKME.password });
+  assert.deepEqual([login.status, login.json], [unknown.status, unknown.json], "a disabled account answers like an unknown one");
+  server.query("CONTROL", `UPDATE platform_admins SET disabled_at = NULL WHERE email = '${LOCKME.email}'`);
 });

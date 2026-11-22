@@ -193,6 +193,27 @@ test("create-platform-admin writes the control database, never a vendor database
   assert.equal(sql("CONTROL", "SELECT count(*) AS n FROM platform_admins")[0].n, 1);
 });
 
+test("create-platform-admin --disable: no login, sessions gone, open support sessions ended, audited; running again re-enables", () => {
+  assert.equal(script("create-platform-admin.mjs", ["--disable", "nobody@venstock.test"]).code !== 0, true, "an unknown admin is refused");
+  const [{ id }] = sql("CONTROL", "SELECT id FROM platform_admins WHERE email = 'staff@venstock.test'");
+  const [{ id: tenantId }] = sql("CONTROL", "SELECT id FROM tenants ORDER BY id LIMIT 1");
+  sql("CONTROL", `INSERT INTO platform_sessions (id, admin_id, mfa_ok, expires_at, created_at) VALUES ('s-disable', ${id}, 1, ${Date.now() + 3600000}, 'x')`);
+  sql("CONTROL", `INSERT INTO support_sessions (admin_id, tenant_id, reason, code_hash, created_at, expires_at)
+    VALUES (${id}, ${tenantId}, 'open when disabled', 'h-disable', 'x', ${Date.now() + 600000})`);
+  const r = script("create-platform-admin.mjs", ["--disable", "staff@venstock.test"]);
+  assert.equal(r.code, 0, r.out);
+  assert.match(r.out, /is disabled/);
+  const [row] = sql("CONTROL", `SELECT disabled_at, password_hash, invite_hash FROM platform_admins WHERE id = ${id}`);
+  assert.ok(row.disabled_at);
+  assert.equal(row.invite_hash, null);
+  assert.equal(sql("CONTROL", `SELECT count(*) AS n FROM platform_sessions WHERE admin_id = ${id}`)[0].n, 0);
+  assert.deepEqual(sql("CONTROL", "SELECT code_hash, ended_by FROM support_sessions WHERE reason = 'open when disabled'"),
+    [{ code_hash: null, ended_by: "admin-disabled" }]);
+  assert.equal(sql("CONTROL", `SELECT count(*) AS n FROM audit_log WHERE action = 'platform.admin.disabled' AND admin_id = ${id}`)[0].n, 1);
+  assert.equal(script("create-platform-admin.mjs", ["staff@venstock.test"]).code, 0);
+  assert.equal(sql("CONTROL", `SELECT disabled_at FROM platform_admins WHERE id = ${id}`)[0].disabled_at, null, "re-enabled with a new invite");
+});
+
 test("scripts that stop early or only touch control never strip vendors from the shared config", () => {
   script("build-config.mjs", []);
   const before = config();

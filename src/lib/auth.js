@@ -8,7 +8,8 @@ const fail = (msg, status = 400, headers) => json({ error: msg }, status, header
 
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
-const SESSION_DAYS = 30;          // how long a device stays logged in
+const SESSION_DAYS = 30;          // how long a vendor's device stays logged in
+const PLATFORM_SESSION_HOURS = 12; // Venstock staff: they can open support sessions on any vendor, so much shorter
 const PRE_MFA_MINUTES = 15;       // time allowed between password and 6-digit code
 const MAX_TRIES = 5;              // wrong passwords, codes or invite codes (together); then locked for LOCK_MINUTES
 const LOCK_MINUTES = 15;
@@ -131,19 +132,25 @@ const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
 // Login, 6-digit codes, invites and sessions for one "realm": a vendor's users (in that vendor's database) or the
 // Venstock platform admins (in the control database). Same rules for both; separate tables and cookie names.
-export const VENDOR_REALM = Object.freeze({ users: "users", sessions: "sessions", fk: "user_id", cookie: VENDOR_COOKIE, issuer: "Venstock", isAdmin: false });
+// sessionMs: how long a full login lasts. canDisable: the users table has disabled_at (a disabled account is treated
+// as if it didn't exist: no login, no sign-up, no session).
+export const VENDOR_REALM = Object.freeze({ users: "users", sessions: "sessions", fk: "user_id", cookie: VENDOR_COOKIE, issuer: "Venstock",
+  isAdmin: false, sessionMs: SESSION_DAYS * DAY, canDisable: false });
 export const PLATFORM_COOKIE = "__Host-pos_platform";
-export const PLATFORM_REALM = Object.freeze({ users: "platform_admins", sessions: "platform_sessions", fk: "admin_id", cookie: PLATFORM_COOKIE, issuer: "Venstock admin", isAdmin: true });
+export const PLATFORM_REALM = Object.freeze({ users: "platform_admins", sessions: "platform_sessions", fk: "admin_id", cookie: PLATFORM_COOKIE,
+  issuer: "Venstock admin", isAdmin: true, sessionMs: PLATFORM_SESSION_HOURS * 60 * MINUTE, canDisable: true });
 
 export function makeAuth(R) {
   const cookie = (token, maxAgeSeconds) => sessionCookie(R.cookie, token, maxAgeSeconds);
   const readToken = (request) => readCookie(request, R.cookie);
   // Platform admins are admins by definition (their table has no is_admin column).
   const meR = (u, mfaOk) => ({ ...me(u, mfaOk), ...(R.isAdmin ? { is_admin: true } : {}) });
+  const enabled = (alias = "") => (R.canDisable ? ` AND ${alias}disabled_at IS NULL` : "");
+  const findUser = (db, email) => db.prepare(`SELECT * FROM ${R.users} WHERE email = ?${enabled()}`).bind(email).first();
 
   async function startSession(db, userId, mfaOk) {
     const token = randomToken();
-    const ms = mfaOk ? SESSION_DAYS * DAY : PRE_MFA_MINUTES * MINUTE;
+    const ms = mfaOk ? R.sessionMs : PRE_MFA_MINUTES * MINUTE;
     await db.batch([
       db.prepare(`DELETE FROM ${R.sessions} WHERE expires_at < ?`).bind(Date.now()),
       db.prepare(`INSERT INTO ${R.sessions} (id, ${R.fk}, mfa_ok, expires_at, created_at) VALUES (?,?,?,?,?)`)
@@ -160,7 +167,7 @@ export function makeAuth(R) {
       .prepare(
         `SELECT s.id AS session_id, s.mfa_ok, s.mfa_failures, u.*
          FROM ${R.sessions} s JOIN ${R.users} u ON u.id = s.${R.fk}
-         WHERE s.id = ? AND s.expires_at > ?`
+         WHERE s.id = ? AND s.expires_at > ?${enabled("u.")}`
       )
       .bind(await sha256(token), Date.now())
       .first();
@@ -196,7 +203,7 @@ export function makeAuth(R) {
     // as for an unknown email, after the same password check, so the lock doesn't reveal which accounts exist.
     if (b === "login" && m === "POST") {
       const email = str(body.email);
-      const user = await db.prepare(`SELECT * FROM ${R.users} WHERE email = ?`).bind(email).first();
+      const user = await findUser(db, email);
       const t = user ? await takeTry(db, user.id) : { locked: false };
       const ok = await checkPassword(String(body.password ?? ""), user?.password_hash);
       if (!ok) {
@@ -212,7 +219,7 @@ export function makeAuth(R) {
       const email = str(body.email);
       const password = String(body.password ?? "");
       const bad = "That email and invite code don't match, or the invite has expired. Ask the owner for a new invite.";
-      const user = await db.prepare(`SELECT * FROM ${R.users} WHERE email = ?`).bind(email).first();
+      const user = await findUser(db, email);
       // Only an account with an invite waiting can be guessed at here, so only those count wrong tries: guessing
       // at an active account can't lock its owner out through this route.
       const invited = user && user.invite_hash && user.invite_expires > Date.now();

@@ -42,6 +42,7 @@ node scripts/create-tenant.mjs --resume <slug>     # finish one that stopped par
 node scripts/create-tenant.mjs --abandon <slug>    # provisioning only: mark deleted, print the database to drop BY HAND
 node scripts/add-admin.mjs --tenant <slug> you@example.com    # add or reset an admin in that vendor's own database
 node scripts/create-platform-admin.mjs you@example.com        # Venstock staff: invite for http://admin.localhost:8788
+node scripts/create-platform-admin.mjs --disable you@example.com   # staff leaves: no login, sessions + support sessions ended
 node scripts/build-config.mjs                      # write .wrangler-generated/local/wrangler.toml from the registry
 node scripts/release.mjs --local                   # release checks; the user runs the remote form, never Claude
 ```

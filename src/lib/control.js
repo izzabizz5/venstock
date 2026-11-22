@@ -55,7 +55,7 @@ export async function audit(env, { admin_id = null, tenant_id = null, support_se
 }
 
 const SESSION_COLUMNS = `s.id, s.admin_id, s.tenant_id, s.expires_at, s.entered_at, s.ended_at, a.email AS admin_email
-  FROM support_sessions s JOIN platform_admins a ON a.id = s.admin_id`;
+  FROM support_sessions s JOIN platform_admins a ON a.id = s.admin_id AND a.disabled_at IS NULL`; // a disabled admin's sessions stop
 
 // Uses the one-time code from the admin's link, at THIS vendor's host. Returns { token, session } or null.
 // client: who used it ("ip …, ua …"), for the audit log, so a link that leaked can be traced.

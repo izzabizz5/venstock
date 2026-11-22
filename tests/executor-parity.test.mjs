@@ -58,6 +58,8 @@ function runFlow(mode) {
   script("add-admin.mjs", "--tenant", "demo", "second@demo.test");             // reset
   script("create-platform-admin.mjs", "staff@venstock.test");
   script("create-platform-admin.mjs", "staff@venstock.test");                  // reset
+  script("create-platform-admin.mjs", "--disable", "staff@venstock.test");
+  script("create-platform-admin.mjs", "staff@venstock.test");                  // re-enable
   // Two vendors stuck in "provisioning" (seeded directly, the same in both runs; not recorded).
   localRun(join(dir, "db"), controlId, `INSERT INTO tenants (slug, name, status, db_binding, db_name, owner_email, created_at, status_changed_at)
     VALUES ('half', 'Half', 'provisioning', 'pending', 'pending', 'o@half.test', 'x', 'x'),
@@ -93,7 +95,7 @@ test("both runs complete the same flows with the same results, and nothing calls
   local = runFlow("local");
   remote = runFlow("remote");
   assert.deepEqual(remote.exits.map(({ name, args, code }) => ({ name, args, code })), local.exits.map(({ name, args, code }) => ({ name, args, code })));
-  assert.deepEqual(local.exits.map((e) => e.code), [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], JSON.stringify(local.exits, null, 1));
+  assert.deepEqual(local.exits.map((e) => e.code), [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], JSON.stringify(local.exits, null, 1));
   assert.equal(readFileSync(npxLog, "utf8"), "", "no wrangler process was started in either run");
 });
 
