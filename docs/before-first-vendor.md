@@ -83,7 +83,7 @@ These don't exist yet. Each needs code, tests and review (ask Claude to build th
   Worker. Its pages load no third-party scripts or embeds, send a strict `Content-Security-Policy` (only its own
   files), and set no cookies (see 11).
   Built: `site/` (checked by `tests/site.unit.test.mjs`). Still to do, by you: fill in everything marked TODO in
-  `site/public/` (the home headline in `index.html`, the monthly price and what it includes in `pricing.html`, the
+  `site/public/` (the home headline in `index.html`, how monthly and yearly billing and cancelling work in `pricing.html`, the
   Stripe payment link and contact address in `join.html`, the onboarding steps in `how.html`, `terms.html`,
   `privacy.html`), then deploy it from `site/` (`npx wrangler deploy` there) once the vendor Worker's wildcard route is live.
 

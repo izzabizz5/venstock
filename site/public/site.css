@@ -113,13 +113,16 @@ p { margin: 0; max-width: 60ch; }
 /* pricing: cream like the other pages; mustard is the stripe under its band */
 .price-page { flex: 1; display: flex; flex-direction: column; }
 .price-page .next { margin-top: auto; }
-.price-figures { display: grid; grid-template-columns: 1fr 1fr; margin-top: var(--s6); border-top: var(--rule-w) solid var(--rule); }
-.price-figures div { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s5) var(--s5) var(--s5) 0; }
-.price-figures div + div { padding-left: var(--s5); border-left: var(--hair-w) solid var(--hair); }
-.price-figures .num { font-size: clamp(48px, 6.6vw, 96px); font-weight: 900; font-stretch: var(--wide); letter-spacing: -.04em; line-height: .9; }
-.price-figures .num .todo { margin-left: var(--s2); padding: var(--s1) var(--s2); font-size: 22px; vertical-align: .9em; }
-.price-figures div:first-child .label::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c-orange); vertical-align: 0; }
-.price-figures div + div .label::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c-deep); vertical-align: 0; }
+.price-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: var(--s6); border-top: var(--rule-w) solid var(--rule); }
+.price-figures > div { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s5) var(--s5) var(--s5) 0; }
+.price-figures > div + div { padding-left: var(--s5); border-left: var(--hair-w) solid var(--hair); }
+.price-figures > div > .num { font-size: clamp(48px, 6vw, 88px); font-weight: 900; font-stretch: var(--wide); letter-spacing: -.04em; line-height: .9; }
+.price-figures .label::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c-orange); vertical-align: 0; }
+.price-figures > div:nth-child(2) .label::before { background: var(--c-deep); }
+.price-figures > div:nth-child(3) .label::before { background: var(--c-mustard); }
+.price-figures p { margin-top: var(--s2); font-size: 15px; max-width: 42ch; }
+.price-figures p.alt { margin-top: 0; color: var(--accent-text); font-weight: 600; }
+.price-figures p.alt + p { margin-top: var(--s1); }
 .price-notes { padding: var(--s5) 0 var(--s6); }
 .price-notes .wrap > h2, .price-notes .wrap > div { padding-top: var(--s4); border-top: var(--hair-w) solid var(--hair); }
 .price-notes .wrap { display: grid; grid-template-columns: 4fr 8fr; gap: var(--s3) var(--s6); }
@@ -183,7 +186,7 @@ p { margin: 0; max-width: 60ch; }
   .steps li::before { font-size: 40px; }
   .steps b { font-size: 18px; }
   .price-figures { grid-template-columns: 1fr; }
-  .price-figures div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--hair); }
+  .price-figures > div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--hair); }
   .join-body .wrap { grid-template-columns: 1fr; }
   .join-body .wrap > div, .join-body .wrap > div + div { padding: var(--s4) 0; border-left: 0; }
 }
@@ -248,7 +251,7 @@ p { margin: 0; max-width: 60ch; }
 
   /* pricing: the figures stacked, the notes fill the rest */
   .price-figures { grid-template-columns: 1fr; }
-  .price-figures div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--hair); }
+  .price-figures > div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--hair); }
   .price-notes .wrap { grid-template-columns: 1fr; }
   .price-notes .wrap > div { border-top: 0; padding-top: 0; }
 
