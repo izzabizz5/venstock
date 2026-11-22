@@ -10,9 +10,10 @@ const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
 const SESSION_DAYS = 30;          // how long a device stays logged in
 const PRE_MFA_MINUTES = 15;       // time allowed between password and 6-digit code
-const MAX_PASSWORD_TRIES = 5;     // then the account is locked for LOCK_MINUTES
+const MAX_TRIES = 5;              // wrong passwords, codes or invite codes (together); then locked for LOCK_MINUTES
 const LOCK_MINUTES = 15;
 const MAX_CODE_TRIES = 5;         // wrong 6-digit codes before the login attempt is thrown away
+const LOCKED = `Too many wrong tries. Wait ${LOCK_MINUTES} minutes and try again.`;
 const INVITE_DAYS = 7;
 const MIN_PASSWORD = 10;
 const PBKDF2_ITERATIONS = 100000; // the most Cloudflare Workers allows
@@ -161,6 +162,21 @@ export function makeAuth(R) {
       .first();
   }
 
+  // ---------- wrong tries, per account ----------
+  // Each attempt TAKES a try before anything is checked, in one atomic statement, so attempts sent all at once are
+  // all counted. Returns { locked } (no try left: refuse without checking) or { last } (this was the last try: if it
+  // fails, lock the account). A correct password gives its try back; a complete login clears the count.
+  async function takeTry(db, id) {
+    const r = await db.prepare(`UPDATE ${R.users} SET failed_logins = failed_logins + 1 WHERE id = ? AND locked_until <= ? RETURNING failed_logins`)
+      .bind(id, Date.now()).first();
+    if (!r) return { locked: true };
+    if (r.failed_logins > MAX_TRIES) { await lockNow(db, id); return { locked: true }; }
+    return { locked: false, last: r.failed_logins >= MAX_TRIES };
+  }
+  const lockNow = (db, id) => db.prepare(`UPDATE ${R.users} SET failed_logins = 0, locked_until = ? WHERE id = ?`)
+    .bind(Date.now() + LOCK_MINUTES * MINUTE, id).run();
+  const giveTryBack = (db, id) => db.prepare(`UPDATE ${R.users} SET failed_logins = MAX(failed_logins - 1, 0) WHERE id = ?`).bind(id).run();
+
   // ---------- /api/auth/* (the only routes open without a login) ----------
   async function authRoutes({ db, request, b, c, m, body }) {
     const sess = await currentSession(db, request);
@@ -170,24 +186,21 @@ export function makeAuth(R) {
       return json(meR(sess, sess.mfa_ok));
     }
 
+    // Wrong passwords and wrong 6-digit codes count together, per account (see takeTry), and only a complete login
+    // (password AND code) clears the count, so logging in again doesn't buy more code guesses.
+    // While an account is locked, only someone who has its password is told so: everyone else gets the same answer
+    // as for an unknown email, after the same password check, so the lock doesn't reveal which accounts exist.
     if (b === "login" && m === "POST") {
       const email = str(body.email);
       const user = await db.prepare(`SELECT * FROM ${R.users} WHERE email = ?`).bind(email).first();
-      if (user && user.locked_until > Date.now()) {
-        const mins = Math.ceil((user.locked_until - Date.now()) / MINUTE);
-        return fail(`Too many wrong passwords. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`, 429);
-      }
+      const t = user ? await takeTry(db, user.id) : { locked: false };
       const ok = await checkPassword(String(body.password ?? ""), user?.password_hash);
       if (!ok) {
-        if (user) {
-          const tries = user.failed_logins + 1;
-          await db.prepare(`UPDATE ${R.users} SET failed_logins = ?, locked_until = ? WHERE id = ?`)
-            .bind(tries >= MAX_PASSWORD_TRIES ? 0 : tries, tries >= MAX_PASSWORD_TRIES ? Date.now() + LOCK_MINUTES * MINUTE : 0, user.id)
-            .run();
-        }
+        if (t.last) await lockNow(db, user.id);
         return fail("Wrong email or password.");
       }
-      await db.prepare(`UPDATE ${R.users} SET failed_logins = 0, locked_until = 0 WHERE id = ?`).bind(user.id).run();
+      if (t.locked) return fail(LOCKED, 429);
+      await giveTryBack(db, user.id); // a correct password doesn't count against the account
       return json(meR(user, false), 200, { "set-cookie": await startSession(db, user.id, false) });
     }
 
@@ -196,18 +209,16 @@ export function makeAuth(R) {
       const password = String(body.password ?? "");
       const bad = "That email and invite code don't match, or the invite has expired. Ask the owner for a new invite.";
       const user = await db.prepare(`SELECT * FROM ${R.users} WHERE email = ?`).bind(email).first();
-      if (user && user.locked_until > Date.now()) return fail("Too many tries. Wait 15 minutes and try again.", 429);
-      const inviteOk = user && user.invite_hash && user.invite_expires > Date.now()
-        && sameString(await sha256(normalizeInvite(body.invite)), user.invite_hash);
+      // Only an account with an invite waiting can be guessed at here, so only those count wrong tries: guessing
+      // at an active account can't lock its owner out through this route.
+      const invited = user && user.invite_hash && user.invite_expires > Date.now();
+      const t = invited ? await takeTry(db, user.id) : { locked: false };
+      const inviteOk = invited && sameString(await sha256(normalizeInvite(body.invite)), user.invite_hash);
       if (!inviteOk) {
-        if (user) {
-          const tries = user.failed_logins + 1;
-          await db.prepare(`UPDATE ${R.users} SET failed_logins = ?, locked_until = ? WHERE id = ?`)
-            .bind(tries >= MAX_PASSWORD_TRIES ? 0 : tries, tries >= MAX_PASSWORD_TRIES ? Date.now() + LOCK_MINUTES * MINUTE : 0, user.id)
-            .run();
-        }
+        if (t.last) await lockNow(db, user.id);
         return fail(bad);
       }
+      if (t.locked) return fail(LOCKED, 429);
       if (password.length < MIN_PASSWORD) return fail(`Use a password of at least ${MIN_PASSWORD} characters.`);
       if (password.length > 200) return fail("That password is too long.");
       await db.batch([
@@ -244,18 +255,25 @@ export function makeAuth(R) {
 
     if (b === "mfa" && !c && m === "POST") {
       if (sess.mfa_ok) return json(meR(sess, true));
+      const endAttempt = async (msg, status) => {
+        await db.prepare(`DELETE FROM ${R.sessions} WHERE id = ?`).bind(sess.session_id).run();
+        return fail(msg, status, { "set-cookie": cookie("", 0) });
+      };
+      // Every code tried takes one of the account's tries BEFORE it is checked, so codes sent all at once can't
+      // slip past the count. Locked (here or by wrong passwords elsewhere): this half-finished login ends.
+      const t = await takeTry(db, sess.id);
+      if (t.locked) return endAttempt(LOCKED, 429);
       const step = await checkTotp(sess.totp_secret, body.code, sess.totp_last_step);
       if (!step) {
-        if (sess.mfa_failures + 1 >= MAX_CODE_TRIES) {
-          await db.prepare(`DELETE FROM ${R.sessions} WHERE id = ?`).bind(sess.session_id).run();
-          return fail("Too many wrong codes. Log in again.", 401, { "set-cookie": cookie("", 0) });
-        }
+        if (t.last) { await lockNow(db, sess.id); return endAttempt(LOCKED, 429); }
+        if (sess.mfa_failures + 1 >= MAX_CODE_TRIES) return endAttempt("Too many wrong codes. Log in again.", 401);
         await db.prepare(`UPDATE ${R.sessions} SET mfa_failures = mfa_failures + 1 WHERE id = ?`).bind(sess.session_id).run();
         return fail("That code didn't work. Check the time on your phone and use the newest code.");
       }
-      // Code is good: turn MFA on (first time) and swap the half-logged-in session for a full one.
+      // Code is good: turn MFA on (first time), clear the wrong-try count, and swap the half-logged-in session for a
+      // full one.
       await db.batch([
-        db.prepare(`UPDATE ${R.users} SET totp_enabled = 1, totp_last_step = ? WHERE id = ?`).bind(step, sess.id),
+        db.prepare(`UPDATE ${R.users} SET totp_enabled = 1, totp_last_step = ?, failed_logins = 0, locked_until = 0 WHERE id = ?`).bind(step, sess.id),
         db.prepare(`DELETE FROM ${R.sessions} WHERE id = ?`).bind(sess.session_id),
       ]);
       return json(meR(sess, true), 200, { "set-cookie": await startSession(db, sess.id, true) });

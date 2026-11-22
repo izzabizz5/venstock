@@ -4,15 +4,17 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { startServer, rawRequest, USERS, PLATFORM_ADMIN } from "./harness.mjs";
-import { sha256, normalizeInvite } from "../src/lib/auth.js";
+import { sha256, normalizeInvite, totpCode } from "../src/lib/auth.js";
 
 const INVITE = "PLAT-FORM-2345";
+// A second staff account for the wrong-tries tests, so locking it doesn't disturb the others.
+const LOCKME = { email: "lockme@venstock.test", password: "test-password-lockme", totpSecret: "JBSWY3DPEHPK3PXP", isAdmin: true };
 let server, admin, demo;
 
 before(async () => {
   server = await startServer({
     vendors: [{ slug: "demo", users: [USERS.admin], seedSql: "INSERT INTO items (name, price_cents, stock) VALUES ('demo-marker', 100, 1);" }, { slug: "acme" }],
-    platformAdmins: [PLATFORM_ADMIN],
+    platformAdmins: [PLATFORM_ADMIN, LOCKME],
   });
   const hash = await sha256(normalizeInvite(INVITE));
   server.query("CONTROL", `INSERT INTO platform_admins (email, invite_hash, invite_expires, created_at) VALUES ('new@venstock.test', '${hash}', ${Date.now() + 86400000}, 'x')`);
@@ -106,4 +108,74 @@ test("a platform admin invite (create-platform-admin) signs up at admin.localhos
   assert.match(setup.json.uri, /^otpauth:\/\/totp\/Venstock%20admin%3Anew%40venstock\.test\?secret=[A-Z2-7]+&issuer=Venstock%20admin&/);
   assert.equal((await server.client("demo.localhost").post("/api/auth/signup", { email: "new@venstock.test", invite: INVITE, password: "a-long-enough-password" })).status, 400,
     "a platform invite means nothing at a vendor");
+});
+
+// ---------- wrong tries count per account, not per login ----------
+const lockRow = () => server.query("CONTROL", `SELECT failed_logins, locked_until > ${Date.now()} AS locked FROM platform_admins WHERE email = '${LOCKME.email}'`)[0];
+const unlock = () => server.query("CONTROL", `UPDATE platform_admins SET failed_logins = 0, locked_until = 0 WHERE email = '${LOCKME.email}'`);
+// A 6-digit code that is certainly wrong right now (not valid for the previous, current or next 30 seconds).
+async function wrongCode() {
+  const now = Math.floor(Date.now() / 30000);
+  const valid = await Promise.all([now - 1, now, now + 1, now + 2].map((s) => totpCode(LOCKME.totpSecret, s)));
+  for (let n = 0; ; n++) { const c = String(n).padStart(6, "0"); if (!valid.includes(c)) return c; }
+}
+const passwordStep = (c) => c.post("/api/auth/login", { email: LOCKME.email, password: LOCKME.password });
+
+test("logging in again doesn't buy more 6-digit guesses: five wrong codes across logins lock the account", async () => {
+  unlock();
+  const c = server.client("admin.localhost");
+  assert.equal((await passwordStep(c)).status, 200);
+  for (let i = 0; i < 3; i++) assert.equal((await c.post("/api/auth/mfa", { code: await wrongCode() })).status, 400);
+  const again = server.client("admin.localhost");
+  assert.equal((await passwordStep(again)).status, 200, "a correct password still opens the code step");
+  assert.equal((await again.post("/api/auth/mfa", { code: await wrongCode() })).status, 400);
+  const fifth = await again.post("/api/auth/mfa", { code: await wrongCode() });
+  assert.equal(fifth.status, 429, "the fifth wrong code in total locks the account");
+  assert.equal(lockRow().locked, 1);
+  assert.equal((await c.post("/api/auth/mfa", { code: await wrongCode() })).status, 429, "the first half-finished login can't go on either");
+  assert.equal((await c.get("/api/auth/me")).status, 401, "and it was thrown away");
+  unlock();
+});
+
+test("codes sent all at once are all counted", async () => {
+  unlock();
+  const c = server.client("admin.localhost");
+  assert.equal((await passwordStep(c)).status, 200);
+  const code = await wrongCode();
+  const answers = await Promise.all(Array.from({ length: 12 }, () => c.post("/api/auth/mfa", { code })));
+  assert.ok(answers.every((r) => r.status !== 200));
+  assert.ok(answers.filter((r) => r.status === 400).length <= 4, `at most 4 plain refusals, got ${answers.map((r) => r.status)}`);
+  assert.equal(lockRow().locked, 1);
+  unlock();
+});
+
+test("while locked, only someone with the password is told; others get the unknown-email answer", async () => {
+  unlock();
+  const c = server.client("admin.localhost");
+  for (let i = 0; i < 5; i++) await c.post("/api/auth/login", { email: LOCKME.email, password: "wrong-wrong-wrong" });
+  assert.equal(lockRow().locked, 1);
+  const wrong = await c.post("/api/auth/login", { email: LOCKME.email, password: "wrong-wrong-wrong" });
+  const unknown = await c.post("/api/auth/login", { email: "nobody@venstock.test", password: "wrong-wrong-wrong" });
+  assert.equal(wrong.status, 400);
+  assert.deepEqual(wrong.json, unknown.json, "a lock must not reveal that the account exists");
+  const right = await passwordStep(c);
+  assert.equal(right.status, 429);
+  assert.equal(right.headers["set-cookie"], undefined);
+  unlock();
+});
+
+test("a complete login clears the count; a correct password alone gives its try back; sign-up guesses can't lock an active account", async () => {
+  unlock();
+  const c = server.client("admin.localhost");
+  for (let i = 0; i < 3; i++) await c.post("/api/auth/login", { email: LOCKME.email, password: "wrong-wrong-wrong" });
+  assert.equal(lockRow().failed_logins, 3);
+  await passwordStep(c);
+  assert.equal(lockRow().failed_logins, 3, "a correct password neither adds nor clears");
+  await server.client("admin.localhost").login(LOCKME);
+  assert.equal(lockRow().failed_logins, 0, "a complete login clears");
+  for (let i = 0; i < 7; i++) {
+    assert.equal((await c.post("/api/auth/signup", { email: LOCKME.email, invite: "AAAA-BBBB-CCCC", password: "a-long-enough-password" })).status, 400);
+  }
+  assert.deepEqual(lockRow(), { failed_logins: 0, locked: 0 }, "no invite waiting: nothing to guess, nothing counted");
+  await server.client("admin.localhost").login(LOCKME);
 });
