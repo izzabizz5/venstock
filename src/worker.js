@@ -13,8 +13,8 @@
 import { handleApi } from "./api.js";
 import { handlePlatformApi } from "./platform.js";
 import { resolveVendor } from "./lib/tenant.js";
-import { enterSupport, supportSession, endSupport, audit } from "./lib/control.js";
-import { readCookie, sessionCookie, SUPPORT_COOKIE, clientDescription } from "./lib/auth.js";
+import { enterSupport, supportSession, endSupport, audit, supportHistory } from "./lib/control.js";
+import { readCookie, sessionCookie, SUPPORT_COOKIE, clientDescription, currentSession } from "./lib/auth.js";
 import { readOnlyDb } from "./lib/readonly-db.js";
 
 
@@ -112,6 +112,9 @@ async function serve(request, env) {
   // ---------- support sessions (this vendor's host only) ----------
   if (route[0] === "support") return supportRoutes(request, env, v.tenant, route);
   const supportToken = readCookie(request, SUPPORT_COOKIE);
+  if (route[0] === "account" && route[1] === "support-sessions" && route.length === 2) {
+    return supportHistoryRoute(request, env, v, supportToken);
+  }
   if (supportToken) {
     const s = await supportSession(env, supportToken, v.tenant.id);
     if (!s) return Response.json({ error: "This support session has ended." }, { status: 401, headers: { ...NO_STORE, "set-cookie": sessionCookie(SUPPORT_COOKIE, "", 0) } });
@@ -144,6 +147,17 @@ function apiRoute(url) {
   } catch {
     return null;
   }
+}
+
+// GET /api/account/support-sessions: this vendor's admins see every Venstock support session on their shop. Never
+// inside a support session itself. The history comes from control for THIS vendor (the hostname's) only.
+async function supportHistoryRoute(request, env, v, supportToken) {
+  if (supportToken) return Response.json({ error: "Not available in a support session" }, { status: 403, headers: NO_STORE });
+  if (request.method !== "GET") return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
+  const sess = await currentSession(v.db, request);
+  if (!sess || !sess.mfa_ok) return Response.json({ error: "Please log in" }, { status: 401, headers: NO_STORE });
+  if (!sess.is_admin) return Response.json({ error: "Only admins can see this." }, { status: 403, headers: NO_STORE });
+  return Response.json(await supportHistory(env, v.tenant.id), { headers: NO_STORE });
 }
 
 // POST /api/support/enter { code }: the one-time code from the admin's link, for THIS vendor only.

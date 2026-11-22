@@ -10,7 +10,7 @@ let server, admin;
 before(async () => {
   server = await startServer({
     vendors: [
-      { slug: "demo", users: [USERS.admin], seedSql: "INSERT INTO items (name, price_cents, stock) VALUES ('demo-marker', 100, 5);" },
+      { slug: "demo", users: [USERS.admin, USERS.staff], seedSql: "INSERT INTO items (name, price_cents, stock) VALUES ('demo-marker', 100, 5);" },
       { slug: "acme", users: [ACME], seedSql: "INSERT INTO items (name, price_cents, stock) VALUES ('acme-marker', 200, 7);" },
       { slug: "closed", status: "suspended" },
     ],
@@ -98,6 +98,7 @@ test("in a support session: reads work, the app is told it's support, and every 
 test("in a support session nothing can be changed: every write is 403, audited, and writes nothing", async () => {
   const { cookie } = await enter("demo.localhost", (await startSupport("demo")).code);
   const before = server.query("DB_T1", "SELECT id, name, stock FROM items ORDER BY id");
+  const usersBefore = server.query("DB_T1", "SELECT id, email, is_admin FROM users ORDER BY id");
   const secret = "customer note that must not be logged";
   for (const [method, path, body] of [["POST", "/api/items", { name: "Sneaky", price_cents: 1, stock: 1, notes: secret }],
     ["PUT", "/api/items/1", { name: "Changed", price_cents: 1, stock: 99, active: true }], ["POST", "/api/items/restock", { items: [{ id: 1, qty: 5 }] }],
@@ -107,7 +108,7 @@ test("in a support session nothing can be changed: every write is 403, audited, 
     assert.equal(r.status, 403, `${method} ${path}`);
   }
   assert.deepEqual(server.query("DB_T1", "SELECT id, name, stock FROM items ORDER BY id"), before);
-  assert.equal(server.query("DB_T1", "SELECT count(*) AS n FROM users")[0].n, 1);
+  assert.deepEqual(server.query("DB_T1", "SELECT id, email, is_admin FROM users ORDER BY id"), usersBefore, "no user added or removed");
   assert.equal(server.query("DB_T1", "SELECT count(*) AS n FROM sales")[0].n, 0);
   const denied = auditActions().filter((a) => a.action === "support.denied").map((a) => a.detail);
   assert.ok(denied.includes("POST /api/items") && denied.includes("DELETE /api/users/1"));
@@ -160,4 +161,51 @@ test("the admin sees sessions and the audit log; the vendor's own users are unaf
   }
   await server.client("demo.localhost").login(USERS.admin);
   await server.client("acme.localhost").login(ACME);
+});
+
+// ---------- the vendor sees its own support sessions, and only its own ----------
+test("a vendor's admins see every support session on their shop, never another vendor's", async () => {
+  const acmeOnly = "Acme asked about a missing restock";
+  const acmeSession = await startSupport("acme", acmeOnly);
+  const { cookie } = await enter("acme.localhost", acmeSession.code);
+  await at("acme.localhost", "/api/items", { headers: { cookie } });
+  await at("acme.localhost", "/api/shows", { headers: { cookie } });
+
+  const demoAdmin = server.client("demo.localhost");
+  await demoAdmin.login(USERS.admin);
+  const mine = await demoAdmin.get("/api/account/support-sessions");
+  assert.equal(mine.status, 200);
+  assert.equal(mine.headers["cache-control"], "no-store");
+  const demoCount = server.query("CONTROL", "SELECT count(*) AS n FROM support_sessions WHERE tenant_id = 1")[0].n;
+  assert.equal(mine.json.length, demoCount);
+  assert.ok(mine.json.every((s) => s.reason !== acmeOnly && s.staff_email === PLATFORM_ADMIN.email));
+  assert.deepEqual(Object.keys(mine.json[0]).sort(),
+    ["created_at", "ended_at", "ended_by", "entered_at", "expires_at", "reason", "requests", "staff_email"], "no codes, tokens or ids");
+
+  const theirs = server.client("acme.localhost");
+  await theirs.login(ACME);
+  const acme = (await theirs.get("/api/account/support-sessions")).json;
+  assert.deepEqual(acme.map((s) => s.reason), [acmeOnly], "acme sees only its own");
+  assert.equal(acme[0].requests, 2, "and how many pages were read");
+
+  // Vendor A's cookie through vendor B's hostname: refused, B's history not shown.
+  const crossed = await at("acme.localhost", "/api/account/support-sessions", { headers: { cookie: `__Host-pos_session=${demoAdmin.cookies["__Host-pos_session"]}` } });
+  assert.equal(crossed.status, 401);
+  assert.doesNotMatch(crossed.text, /missing restock/);
+  // Nothing in the request can choose the vendor.
+  const steered = await demoAdmin.get("/api/account/support-sessions?tenant_id=2&slug=acme");
+  assert.ok(steered.json.every((s) => s.reason !== acmeOnly));
+});
+
+test("support history: admins only, never inside a support session, never anything but GET", async () => {
+  const staff = server.client("demo.localhost");
+  await staff.login(USERS.staff);
+  assert.equal((await staff.get("/api/account/support-sessions")).status, 403, "not for non-admin users");
+  assert.equal((await at("demo.localhost", "/api/account/support-sessions")).status, 401, "not without a login");
+  const { cookie } = await enter("demo.localhost", (await startSupport("demo")).code);
+  assert.equal((await at("demo.localhost", "/api/account/support-sessions", { headers: { cookie } })).status, 403,
+    "staff in a support session can't read the vendor's view of support sessions");
+  const admin2 = server.client("demo.localhost");
+  await admin2.login(USERS.admin);
+  assert.equal((await admin2.post("/api/account/support-sessions", {})).status, 404);
 });

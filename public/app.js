@@ -135,7 +135,7 @@ async function refresh() {
 const SHOP_KEYS = ["items", "settings", "show", "sales", "summary", "shows", "upcoming"];
 function forgetShop() {
   for (const k of SHOP_KEYS) store.set(k, null);
-  Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null, lastInvite: null });
+  Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null, lastInvite: null, supportVisits: null });
 }
 
 // A Venstock support session (read-only, opened from the platform admin's one-time link): /api/auth/me says so.
@@ -1058,6 +1058,10 @@ async function loadUsers() {
   if (!state.me?.is_admin) return;
   try { state.users = await api("users"); state.usersError = ""; }
   catch (e) { state.usersError = errText(e); }
+  // Venstock support visits to this shop (not shown inside a support session itself).
+  if (!inSupport()) {
+    try { state.supportVisits = await api("account/support-sessions"); } catch { state.supportVisits = null; }
+  }
   if (state.tab === "account") softRender();
 }
 
@@ -1077,6 +1081,25 @@ function viewAccount() {
       </form>
       <p class="muted">Your other devices get logged out when you change it.</p></div>
     ${me.is_admin ? usersCardHTML() : ""}
+    ${me.is_admin && !inSupport() ? supportVisitsHTML() : ""}
+  </div>`;
+}
+
+// Every time Venstock staff looked at this shop's data (read-only, 30 minutes at most, with a reason).
+function supportVisitsHTML() {
+  const visits = state.supportVisits;
+  const when = (v) => (v ? new Date(v).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+  const live = (v) => !v.ended_at && v.expires_at > Date.now();
+  const how = (v) => !v.entered_at ? (live(v) ? "link not used yet" : "link never used")
+    : v.ended_at ? `ended ${when(v.ended_at)}` : live(v) ? `happening now, until ${when(v.expires_at)}` : `ran until ${when(v.expires_at)}`;
+  return `
+  <div class="card"><strong>Venstock support visits</strong>
+    <p class="muted">Each time Venstock staff opened your shop to help (read-only, at most 30 minutes, with a reason).</p>
+    ${!visits ? `<p class="muted">Loading…</p>` : !visits.length ? `<p class="muted">None.</p>` : visits.map((v) => `
+      <div class="row user-row"><span class="grow">${esc(when(v.created_at))} · ${esc(v.staff_email)}<br>
+        <span class="muted">${esc(v.reason)}</span><br>
+        <span class="muted">${esc(how(v))}${v.entered_at ? ` · ${Number(v.requests) || 0} page${Number(v.requests) === 1 ? "" : "s"} read` : ""}</span></span>
+      </div>`).join("")}
   </div>`;
 }
 

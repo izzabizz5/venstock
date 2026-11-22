@@ -101,6 +101,8 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   once, only at that vendor's host; the `__Host-pos_support` cookie is valid only there, until it ends or 30 minutes
   pass. Anything but GET is refused (403) before a handler runs, and handlers get `readOnlyDb()`, which allows only
   single SELECT statements. Every step and every request goes to `audit_log` in control; request bodies never do.
+  A vendor's admins see every support session on their shop at `GET /api/account/support-sessions` (served by
+  `src/worker.js` from control, for the hostname's vendor only; refused inside a support session).
 - Every request except GET/HEAD must be `Content-Type: application/json` (415 otherwise) and, when the browser sends
   `Sec-Fetch-Site`, `same-origin` (403 otherwise): sibling subdomains are same-site, so SameSite cookies alone don't
   stop forged writes (`src/worker.js` `refuseForgedRequest`). GET requests never change anything.

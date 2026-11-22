@@ -102,3 +102,16 @@ export async function endSupport(env, token, tenantId) {
     .bind(new Date().toISOString(), s.id).run();
   await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.end", detail: "ended from the vendor's host" });
 }
+
+// This vendor's own support-session history, for its admins (GET /api/account/support-sessions, src/worker.js):
+// when Venstock looked, who, why, until when, and how many pages were read. tenantId is always the vendor the
+// request's hostname resolved to, never a value from the request.
+export async function supportHistory(env, tenantId) {
+  const { results } = await env.CONTROL.prepare(
+    `SELECT s.created_at, s.expires_at, s.entered_at, s.ended_at, s.ended_by, s.reason, a.email AS staff_email,
+            (SELECT count(*) FROM audit_log l WHERE l.support_session_id = s.id AND l.action = 'support.request') AS requests
+     FROM support_sessions s JOIN platform_admins a ON a.id = s.admin_id
+     WHERE s.tenant_id = ? ORDER BY s.id DESC LIMIT 50`
+  ).bind(tenantId).all();
+  return results;
+}
