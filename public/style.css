@@ -60,17 +60,19 @@ header {
 
 /* ---------- sell screen: catalog field + order field ---------- */
 .pos { display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w); min-height: calc(100vh - var(--header-h)); }
-.catalog { padding: var(--s5); min-width: 0; }
-.notice { background: var(--mark); color: var(--on-mark); padding: var(--s3) var(--s4); margin-bottom: var(--s4); font-weight: 500; }
+/* the catalog is set about 30% smaller than the rest of the app, so more items fit on screen */
+.catalog { padding: var(--s4); min-width: 0; }
+.notice { background: var(--mark); color: var(--on-mark); padding: var(--s2) var(--s3); margin-bottom: var(--s3); font-size: var(--fs-s); font-weight: 500; }
+.catalog .notice .sm { min-height: 34px; padding: 0 var(--s3); font-size: 10px; }
 .notice[hidden] { display: none; }
-.toolbar { display: flex; gap: var(--s3); margin-bottom: var(--s4); }
+.toolbar { display: flex; gap: var(--s2); margin-bottom: var(--s3); }
 #search {
-  flex: 1; min-width: 0; height: 52px; padding: 0 14px; font-size: 17px;
+  flex: 1; min-width: 0; height: 36px; padding: 0 10px; font-size: 14px;
   border: var(--edge-w) solid var(--edge); background: var(--page);
 }
 .restock-btn {
-  min-height: 52px; padding: 0 var(--s5); border: var(--edge-w) solid var(--edge); background: none; color: var(--text);
-  font-size: var(--fs-label); white-space: nowrap;
+  min-height: 36px; padding: 0 var(--s4); border: var(--edge-w) solid var(--edge); background: none; color: var(--text);
+  font-size: 10px; white-space: nowrap;
 }
 /* category filters: one segmented strip, the active one in mustard */
 .chips { display: flex; flex-wrap: wrap; margin-bottom: var(--s5); }
@@ -79,19 +81,21 @@ header {
   background: var(--page); color: var(--text); font-size: var(--fs-label); white-space: nowrap;
 }
 .chip.on { background: var(--mark); color: var(--on-mark); position: relative; }
+.catalog .chips { margin-bottom: var(--s4); }
+.catalog .chip { min-height: 34px; padding: 0 var(--s3); font-size: 10px; }
 /* item tiles: cream fields separated by sage gaps; an item in the order fills sky */
 .products {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: var(--hair-w);
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: var(--hair-w);
   background: var(--hair); border: var(--hair-w) solid var(--hair);
 }
 .product {
-  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left;
-  min-height: 136px; padding: 14px var(--s4); border: 0; background: var(--tile); color: var(--text);
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s1); text-align: left;
+  min-height: 96px; padding: 10px 11px; border: 0; background: var(--tile); color: var(--text);
 }
-.product .cat { font-size: 11px; font-weight: 700; font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase; color: var(--text-2); }
-.product .pname { font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
-.product .price { margin-top: auto; font-size: 22px; font-weight: 800; font-stretch: 112%; font-variant-numeric: tabular-nums lining-nums; line-height: 1; }
-.product .stock { font-size: 13px; color: var(--text-2); }
+.product .cat { font-size: 9px; font-weight: 700; font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase; color: var(--text-2); }
+.product .pname { font-size: 13px; font-weight: 500; line-height: 1.25; overflow-wrap: anywhere; }
+.product .price { margin-top: auto; font-size: 16px; font-weight: 800; font-stretch: 112%; font-variant-numeric: tabular-nums lining-nums; line-height: 1; }
+.product .stock { font-size: 10px; color: var(--text-2); }
 .product.in-cart { background: var(--tile-on); }
 .product.in-cart .cat, .product.in-cart .stock { color: var(--text); }
 :root[data-theme="dark"] .product.in-cart { box-shadow: inset 0 0 0 3px var(--mark); }
@@ -99,10 +103,10 @@ header {
 .product.out .stock { color: var(--danger); font-weight: 700; }
 .product.in-cart.out .stock { color: var(--text); }
 .badge {
-  position: absolute; top: 0; right: 0; min-width: 36px; height: 36px; padding: 0 6px; display: grid; place-items: center;
-  background: var(--invert-bg); color: var(--invert-fg); font-weight: 800; font-variant-numeric: tabular-nums;
+  position: absolute; top: 0; right: 0; min-width: 26px; height: 26px; padding: 0 5px; display: grid; place-items: center;
+  background: var(--invert-bg); color: var(--invert-fg); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
 }
-.empty { grid-column: 1 / -1; margin: 0; padding: var(--s5) var(--s4); background: var(--tile); }
+.empty { grid-column: 1 / -1; margin: 0; padding: var(--s4) var(--s3); background: var(--tile); }
 
 /* order panel: the deep-blue money field. A grid: the ordered items take all the height the compact bottom part
    (deals, totals, payment + notes side by side, Complete sale, Clear cart) leaves them. */
@@ -469,12 +473,12 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
   :root { --panel-w: 340px; }
   .brand { padding: 0 var(--s4); }
   .brand strong { font-size: 18px; }
-  .catalog { padding: var(--s4); }
+  .catalog { padding: var(--s3); }
   .order { padding: var(--s4); }
   .order-head { gap: var(--s2); }
   .order-head h2 { font-size: 22px; margin-right: auto; }
   #register { min-width: 0; max-width: 150px; font-stretch: 100%; letter-spacing: .04em; }
-  .products { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .products { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   #showName { display: none; }
 }
 
@@ -497,14 +501,15 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
   input, select, textarea, #search, #register, .order select, .order input { font-size: 16px; }
 
   .pos { display: block; min-height: 0; }
-  .catalog { padding: var(--s3); }
-  .toolbar { gap: var(--s2); margin-bottom: var(--s3); }
-  .restock-btn { padding: 0 var(--s3); }
-  .chips { margin-bottom: var(--s3); } /* categories wrap onto more rows: nothing hidden off-screen */
-  .chip { padding: 0 14px; }
-  .products { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .product { min-height: 120px; padding: var(--s3); }
-  .product .price { font-size: 20px; }
+  .catalog { padding: var(--s2); }
+  .toolbar { gap: 6px; margin-bottom: var(--s2); }
+  .restock-btn { padding: 0 var(--s2); }
+  .catalog .chips { margin-bottom: var(--s2); } /* categories wrap onto more rows: nothing hidden off-screen */
+  .catalog .chip { padding: 0 10px; }
+  .products { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .product { min-height: 84px; padding: var(--s2); }
+  .product .pname { font-size: 12px; }
+  .product .price { font-size: 15px; }
 
   /* the order panel becomes a sheet that slides up from the bar */
   .order {

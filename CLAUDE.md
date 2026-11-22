@@ -151,7 +151,8 @@ user deploys it from `site/`; Claude never does, and never adds a deploy script 
   0 everywhere; no box-shadow with a blur, no gradients, no backdrop blur, no hover lifts; no emoji as icons. Two
   self-hosted OFL fonts (Archivo, Fraunces) in `public/fonts/` (150 KB budget, licences alongside); no font or CDN
   requests. Every text colour pair is declared as an `@pair` in tokens.css and must meet WCAG AA in light and dark.
-  Tap targets are 48px or more (44px inside the phone order sheet); orange is the one main action per section; colour is never the only signal.
+  Tap targets are 48px or more (44px inside the phone order sheet; the Sell catalog is ~30% smaller: 34-36px
+  search and filters); orange is the one main action per section; colour is never the only signal.
   Respect `prefers-reduced-motion`. Front-end restyles change CSS, not markup or behaviour: keep every id, class and
   data attribute that `app.js`, `admin.js` or tests use.
 - Test runs: while iterating, run only the test file(s) for the code you changed, or `npm run test:fast`. Run

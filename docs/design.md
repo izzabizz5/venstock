@@ -132,8 +132,9 @@ without a third family.
 - **Flat color fields and thick rules** (2px hairline, 3px field edge, 6px structural rule) instead of boxes.
 - **Orange is the one primary action** on a screen (Complete sale, Log in, Add item). It is never used for
   decoration.
-- **Tap targets are at least 48px**, except inside the phone order sheet, where they are 44px (Apple's minimum) so
-  more of the order fits. Complete sale is the strongest thing on the register; the total is bold, just above the
+- **Tap targets are at least 48px**, with two exceptions chosen so more fits on screen: inside the phone order
+  sheet they are 44px (Apple's minimum), and the Sell catalog is set about 30% smaller (search and Restock 36px,
+  category filters 34px, item tiles 84–96px tall, item text 12–16px). Complete sale is the strongest thing on the register; the total is bold, just above the
   subtotal.
 - **Color is never the only signal:** errors, sold out and failed sales always carry words.
 - **Motion:** none beyond what the app needs (the toast and the cart sheet), and none at all under
