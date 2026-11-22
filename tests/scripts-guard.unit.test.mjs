@@ -41,11 +41,38 @@ test("--remote is refused while wrangler.toml's CONTROL id is a placeholder", ()
   }
 });
 
+test("--remote is refused until BASE_DOMAIN is the real vendor domain with a wildcard route (a localhost deploy would 404)", () => {
+  const copy = mkdtempSync(join(tmpdir(), "venstock-domain-"));
+  try {
+    for (const p of ["scripts", "src", "migrations", "public"]) cpSync(join(ROOT, p), join(copy, p), { recursive: true });
+    const withId = readFileSync(join(ROOT, "wrangler.toml"), "utf8")
+      .replace(/(binding = "CONTROL"\ndatabase_name = "venstock-dev-control"\ndatabase_id = )"<>"/, '$1"11111111-2222-3333-4444-555555555555"');
+    mkdirSync(join(copy, "bin"));
+    const npxLog = join(copy, "npx.log");
+    writeFileSync(join(copy, "bin", "npx"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${npxLog}"\nexit 97\n`);
+    chmodSync(join(copy, "bin", "npx"), 0o755);
+    const renv = { ...process.env, PATH: `${join(copy, "bin")}:${process.env.PATH}` };
+    const run = (name, args) => spawnSync(process.execPath, [join(copy, "scripts", name), ...args, "--remote"], { cwd: copy, encoding: "utf8", env: renv });
+    for (const [toml, why] of [[withId, /set BASE_DOMAIN/],
+      [withId.replace('BASE_DOMAIN = "localhost"', 'BASE_DOMAIN = "shops.example"'), /add a \[\[routes\]\] block/]]) {
+      writeFileSync(join(copy, "wrangler.toml"), toml);
+      for (const [name, args] of [["build-config.mjs", []], ["migrate.mjs", []], ["create-platform-admin.mjs", ["z@example.test"]],
+        ["create-tenant.mjs", ["zzz-shop", "Z", "z@example.test"]], ["release.mjs", []]]) {
+        const r = run(name, args);
+        assert.notEqual(r.status, 0, name);
+        assert.match(`${r.stdout}${r.stderr}`, why, name);
+      }
+    }
+    assert.ok(!existsSync(npxLog) || readFileSync(npxLog, "utf8") === "", "nothing was sent anywhere");
+  } finally { rmSync(copy, { recursive: true, force: true }); }
+});
+
 test("remote, against a copy with a real-looking control id and a fake npx: only venstock-dev-* is ever touched", () => {
   const copy = mkdtempSync(join(tmpdir(), "venstock-remote-"));
   try {
     for (const p of ["scripts", "src", "migrations", "public"]) cpSync(join(ROOT, p), join(copy, p), { recursive: true });
     writeFileSync(join(copy, "wrangler.toml"), readFileSync(join(ROOT, "wrangler.toml"), "utf8")
+      .replace(/BASE_DOMAIN = "localhost"/, 'BASE_DOMAIN = "shops.example"\n\n[[routes]]\npattern = "*.shops.example/*"\nzone_name = "shops.example"')
       .replace(/(binding = "CONTROL"\ndatabase_name = "venstock-dev-control"\ndatabase_id = )"<>"/, '$1"11111111-2222-3333-4444-555555555555"'));
     mkdirSync(join(copy, "bin"));
     const log = join(copy, "npx.log");

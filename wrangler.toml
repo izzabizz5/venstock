@@ -12,8 +12,13 @@ run_worker_first = true
 [dev]
 port = 8788
 
-# Vendors live at <slug>.<BASE_DOMAIN>. Locally that is <slug>.localhost:8788. Set the real domain before any deploy
-# (you, not Claude); with "localhost" deployed, every request would answer 404.
+# Vendors live at <slug>.<BASE_DOMAIN>; the platform admin at admin.<BASE_DOMAIN>.
+# BASE_DOMAIN here is the PRODUCTION vendor domain. Local configs always use "localhost" (<slug>.localhost:8788), so
+# this value only matters for deploys. Every remote command refuses until it is a real domain AND a wildcard route
+# for it exists below (you set both, not Claude; see docs/before-first-vendor.md):
+#   [[routes]]
+#   pattern = "*.<your domain>/*"
+#   zone_name = "<your domain>"
 [vars]
 BASE_DOMAIN = "localhost"
 

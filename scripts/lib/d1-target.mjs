@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { createHash, randomInt } from "node:crypto";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { renderConfig, readBaseToml, LOCAL_CONTROL, vendorBinding } from "./wrangler-config.mjs";
+import { renderConfig, readBaseToml, productionDomainProblem, LOCAL_CONTROL, vendorBinding } from "./wrangler-config.mjs";
 import { stmt, isStmt, localExecutor, remoteExecutor } from "./executor.mjs";
 export { stmt };
 
@@ -55,6 +55,8 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
       die(`Refusing --remote: wrangler.toml's CONTROL binding must name "venstock-dev-control" (found ${JSON.stringify(c?.database_name ?? null)}).`);
     }
     if (!c.database_id || c.database_id === "<>") die("Refusing --remote: set CONTROL's database_id in wrangler.toml (the id of venstock-dev-control).");
+    const domain = productionDomainProblem(base);
+    if (domain) die(`Refusing --remote: ${domain}`);
     control = { name: c.database_name, id: c.database_id };
     outDir = join(ROOT, ".wrangler-generated", "remote");
     if (!quiet) console.log("About to touch REMOTE D1 databases (only venstock-dev-control and venstock-dev-t<id>).");
@@ -71,7 +73,8 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
   const bootstrapDir = mkdtempSync(join(tmpdir(), "venstock-bootstrap-"));
   process.on("exit", () => rmSync(bootstrapDir, { recursive: true, force: true }));
   let configPath = join(bootstrapDir, "wrangler.toml");
-  writeFileSync(configPath, renderConfig({ root: ROOT, outDir: bootstrapDir, control, vendors: [], migrationsRoot }));
+  const target = remote ? "remote" : "local";
+  writeFileSync(configPath, renderConfig({ root: ROOT, outDir: bootstrapDir, control, vendors: [], migrationsRoot, target }));
   // database_name (checked before every remote call) and database_id (local file) behind each binding in the
   // config currently in use.
   let names = { CONTROL: control.name };
@@ -104,7 +107,7 @@ export function d1Target({ remote, migrationsRoot, quiet = false } = {}) {
       if (!Array.isArray(vendors)) throw new Error("writeConfig needs the full vendor list");
       for (const v of vendors) if (v.db_id && remote && !ALLOWED_REMOTE.test(v.db_name)) die(`Refusing --remote: vendor ${v.id}'s database is ${v.db_name}, not venstock-dev-t<id>.`);
       mkdirSync(outDir, { recursive: true });
-      writeFileSync(generatedPath, renderConfig({ root: ROOT, outDir, control, vendors, migrationsRoot }));
+      writeFileSync(generatedPath, renderConfig({ root: ROOT, outDir, control, vendors, migrationsRoot, target }));
       configPath = generatedPath;
       names = { CONTROL: control.name };
       ids = { CONTROL: control.id };
