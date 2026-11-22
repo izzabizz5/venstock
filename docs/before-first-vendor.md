@@ -75,8 +75,8 @@ These don't exist yet. Each needs code, tests and review (ask Claude to build th
 - [ ] **Owner "export everything":** one download with items, shows, upcoming shows, every sale with its lines
   (voided included), settings and the user list (emails and roles only). Today a vendor can download items and
   sales as CSV, but not settings or the user list.
-- [ ] **Error visibility:** turn on Workers Logs (an `[observability]` block in the generated deploy config, which
-  `scripts/lib/wrangler-config.mjs` doesn't write yet) and set up an alert on repeated 5xx responses. Server errors
+- [ ] **Error visibility:** Workers Logs are on: the generated deploy config has `[observability] enabled = true`
+  (written by `scripts/lib/wrangler-config.mjs`). Still to do: an alert on repeated 5xx responses. Server errors
   are logged with method, path and vendor id, never request bodies.
 - [ ] **The public site at the apex:** Venstock's marketing and sign-up pages, as a SEPARATE Worker in this repo:
   `site/` with its own `wrangler.toml`, static assets only, no D1 bindings, route `venstock.org/*`, never the vendor
@@ -190,6 +190,7 @@ cd / && rm -rf /tmp/venstock-drill
   - `https://admin.<domain>/` asks for Cloudflare Access, then shows the staff login; the invite from step 4 works.
   - `https://made-up-name.<domain>/` and `https://status.<domain>/` answer "Not found".
   - `https://www.<domain>/anything` answers `301` with `location: https://<domain>/`.
+  - Workers Logs (Workers & Pages → venstock → Logs) show the requests you just made.
   - The response headers include `referrer-policy: no-referrer`; `https://<anything>.workers.dev` doesn't serve it.
   - Onboard a test vendor end to end with `docs/runbook.md` ("Onboarding"), including a support session, then
     abandon or delete it.

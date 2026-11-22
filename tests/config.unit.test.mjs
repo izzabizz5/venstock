@@ -96,6 +96,16 @@ test("remote configs carry wrangler.toml's BASE_DOMAIN and its wildcard route", 
   });
 });
 
+test("the deploy (remote) config turns on Workers Logs; local configs don't have the block", () => {
+  withToml(PROD, (dir) => {
+    const remote = renderConfig({ root: dir, outDir: join(dir, "gen"), control: LOCAL_CONTROL, vendors: [], target: "remote" });
+    assert.match(remote, /^\[observability\]\nenabled = true$/m);
+    assert.equal(remote.match(/^\[observability\]$/gm).length, 1);
+    const local = renderConfig({ root: dir, outDir: join(dir, "gen"), control: LOCAL_CONTROL, vendors: [] });
+    assert.doesNotMatch(local, /observability/);
+  });
+});
+
 test("nothing remote until BASE_DOMAIN is a real domain with a wildcard route for it", () => {
   const base = (domain, routes = []) => ({ vars: { BASE_DOMAIN: domain }, routes });
   const ok = [{ pattern: "*.shops.example/*", zone_name: "shops.example" }];

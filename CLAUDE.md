@@ -90,7 +90,8 @@ Deploy: **never by Claude.** The user runs `node scripts/release.mjs` (which onl
 and the deploy itself, following `docs/before-first-vendor.md` and `docs/runbook.md`. `wrangler.toml`'s
 `BASE_DOMAIN` is the production vendor domain (local configs always use `localhost`); every remote script refuses
 until it is a real domain with a `[[routes]]` block for `*.<BASE_DOMAIN>/*`. Generated deploy configs set
-`workers_dev = false` and `preview_urls = false`. The apex will serve Venstock's public site as a separate static-only Worker (`site/`, not
+`workers_dev = false`, `preview_urls = false` and `[observability] enabled = true` (Workers Logs; local configs
+don't have the block). The apex will serve Venstock's public site as a separate static-only Worker (`site/`, not
 built yet; rules in `docs/before-first-vendor.md` section 11). Never run the original app's deploy command
 (`npx wrangler pages deploy public --project-name=show-pos`) or anything against `show-pos-db`.
 
