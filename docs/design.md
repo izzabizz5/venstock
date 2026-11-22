@@ -155,7 +155,7 @@ The screen is built from flat color fields; a change of color stands in for a bo
 - **Login:** a deep-blue field with the stacked wordmark beside the form (above it on phones).
 - **Public site:** the same tokens and fonts, one page per header link: Home (`/`: the opening with the
   product's own order panel drawn in HTML, then a ruled index of the other pages), What it is (`/what`), How it
-  works (`/how`), Pricing (`/pricing`, the page under its band is the mustard field) and Join (`/join`, the one
+  works (`/how`), Pricing (`/pricing`) and Join (`/join`, the one
   orange button). Every page title sits on the same ink band. Each page has one palette colour (What sky, How mid
   blue, Pricing mustard, Join orange) used only as small details: the stripe under its band, the underline of its
   header tab, the squares beside facts and its marker in the home index; the footer carries all four as a strip.

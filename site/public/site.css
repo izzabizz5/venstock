@@ -110,17 +110,18 @@ p { margin: 0; max-width: 60ch; }
 .steps b { font: 700 20px/1.2 var(--font-serif); }
 .steps span { color: var(--text-2); font-size: 15px; }
 
-/* pricing: under the ink band, the page is the mustard field */
-.price-page { flex: 1; display: flex; flex-direction: column; background: var(--mark); color: var(--on-mark); }
+/* pricing: cream like the other pages; mustard is the stripe under its band */
+.price-page { flex: 1; display: flex; flex-direction: column; }
 .price-page .next { margin-top: auto; }
-.price-figures { display: grid; grid-template-columns: 1fr 1fr; }
+.price-figures { display: grid; grid-template-columns: 1fr 1fr; margin-top: var(--s6); border-top: var(--rule-w) solid var(--rule); }
 .price-figures div { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s5) var(--s5) var(--s5) 0; }
-.price-figures div + div { padding-left: var(--s5); border-left: var(--hair-w) solid var(--on-mark); }
+.price-figures div + div { padding-left: var(--s5); border-left: var(--hair-w) solid var(--hair); }
 .price-figures .num { font-size: clamp(48px, 6.6vw, 96px); font-weight: 900; font-stretch: var(--wide); letter-spacing: -.04em; line-height: .9; }
 .price-figures .num .todo { margin-left: var(--s2); padding: var(--s1) var(--s2); font-size: 22px; vertical-align: .9em; }
 .price-figures div:first-child .label::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c-orange); vertical-align: 0; }
 .price-figures div + div .label::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; background: var(--c-deep); vertical-align: 0; }
-.price-notes { padding: var(--s5) 0 var(--s6); border-top: var(--rule-w) solid var(--on-mark); }
+.price-notes { padding: var(--s5) 0 var(--s6); }
+.price-notes .wrap > h2, .price-notes .wrap > div { padding-top: var(--s4); border-top: var(--hair-w) solid var(--hair); }
 .price-notes .wrap { display: grid; grid-template-columns: 4fr 8fr; gap: var(--s3) var(--s6); }
 .price-notes h2 { font-size: 22px; }
 .price-notes p { font-size: 15px; }
@@ -147,9 +148,6 @@ p { margin: 0; max-width: 60ch; }
 .next .label { color: var(--accent-text); }
 .next b { font-size: clamp(22px, 2.8vw, 36px); font-weight: 900; font-stretch: var(--wide); letter-spacing: -.02em; line-height: 1; }
 .next:hover { background: var(--tile-on); }
-.price-page .next { border-top-color: var(--on-mark); }
-.price-page .next .label { color: var(--on-mark); }
-.price-page .next:hover { background: var(--page); color: var(--text); }
 
 /* ---------- footer: the ink band, under a strip of the four page colours ---------- */
 .foot { background: var(--invert-bg); color: var(--invert-fg); padding: 0 0 var(--s5); font-size: 15px; }
@@ -185,7 +183,7 @@ p { margin: 0; max-width: 60ch; }
   .steps li::before { font-size: 40px; }
   .steps b { font-size: 18px; }
   .price-figures { grid-template-columns: 1fr; }
-  .price-figures div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--on-mark); }
+  .price-figures div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--hair); }
   .join-body .wrap { grid-template-columns: 1fr; }
   .join-body .wrap > div, .join-body .wrap > div + div { padding: var(--s4) 0; border-left: 0; }
 }
