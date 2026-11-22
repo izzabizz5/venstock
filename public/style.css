@@ -521,6 +521,30 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
   .order-head h2 { font-size: 22px; margin-right: auto; }
   #register { max-width: 40vw; }
   .lines { max-height: 46vh; }
+  /* the order sheet, a step smaller than on big screens: 44px controls, tighter rows, less going on */
+  .order { gap: 6px; padding: var(--s3) var(--s3) calc(var(--s3) + env(safe-area-inset-bottom)); }
+  .order-head h2 { font-size: 19px; }
+  .order select, .order input { min-height: 44px; padding: 0 var(--s2); }
+  #register { max-width: 44vw; font-weight: 600; font-stretch: 100%; letter-spacing: 0; text-transform: none; }
+  .sheet-close { width: 44px; height: 44px; font-size: 22px; }
+  .lines { padding-right: var(--s2); scrollbar-width: thin; }
+  .line { gap: var(--s1) var(--s2); padding: var(--s2) 0; }
+  .line-name { font-size: 15px; line-height: 1.25; }
+  .line-name small { font-size: 12px; }
+  .line-total { font-size: 15px; }
+  .qty b { min-width: 34px; font-size: 15px; }
+  .qbtn { width: 44px; height: 44px; font-size: 19px; }
+  .x { min-width: 44px; min-height: 44px; font-size: 20px; }
+  .deals-box .label { font-size: 10px; }
+  .deal-list li { font-size: 13px; }
+  .totals .trow { font-size: 14px; }
+  .trow.grand { padding-top: var(--s1); }
+  .trow.grand span:first-child { font-size: 10px; }
+  .trow.grand span:last-child { font-size: 20px; }
+  .hint { font-size: 13px; }
+  .order > #notes::placeholder { font-size: 12px; }
+  .order .complete { min-height: 48px; font-size: 13px; }
+  .order > .link.danger { min-height: 44px; padding: 0 var(--s4); font-size: 11px; }
   .empty-cart { margin: var(--s3) 0; }
   .sheet-backdrop {
     display: block; position: fixed; inset: 0; z-index: 35; border: 0; padding: 0; background: var(--scrim);
