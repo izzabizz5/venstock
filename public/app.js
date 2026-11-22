@@ -337,7 +337,7 @@ function totalsHTML() {
     ${t.deals ? `<div class="trow deal"><span>Bundle Deals:</span><span>-${money(t.deals)}</span></div>` : ""}
     ${t.extra ? `<div class="trow deal"><span>Extra discount:</span><span>-${money(t.extra)}</span></div>` : ""}
     <div class="trow grand"><span>Total:</span><span>${money(t.total)}</span></div>
-    ${t.hint ? `<div class="hint">💡 ${esc(t.hint)}</div>` : ""}`;
+    ${t.hint ? `<div class="hint">${esc(t.hint)}</div>` : ""}`;
 }
 
 // Deals the current order qualifies for (nothing shows until the order matches one).
@@ -624,13 +624,13 @@ function viewSales() {
       <div class="card"><div class="row"><span class="grow">${s.items.map((i) => `${i.qty}× ${esc(i.name)}`).join(", ")}</span>
         <span class="pill">not uploaded</span></div>
         <div class="muted">${meta(s, sub - (s.discount_cents || 0))}${s.discount_cents ? ` · ${esc(s.discount_label)} −${money(s.discount_cents)}` : ""}</div>
-        ${s.notes ? `<div class="note">📝 ${esc(s.notes)}</div>` : ""}</div>`;
+        ${s.notes ? `<div class="note">${esc(s.notes)}</div>` : ""}</div>`;
     }).join("")}
     ${sales.map((s) => `
       <div class="card ${s.voided ? "void" : ""}"><div class="row"><span class="grow">${esc(s.summary || "")}</span>
         ${s.voided ? `<span class="pill gray">cancelled</span>` : `<button class="sm danger" data-void="${s.id}">Cancel sale</button>`}</div>
         <div class="muted">${meta(s, s.total_cents)}${s.discount_cents ? ` · ${esc(s.discount_label || "discount")} −${money(s.discount_cents)}` : ""}</div>
-        ${s.notes ? `<div class="note">📝 ${esc(s.notes)}</div>` : ""}</div>`).join("")
+        ${s.notes ? `<div class="note">${esc(s.notes)}</div>` : ""}</div>`).join("")
       || (pend.length ? "" : `<p class="muted">No sales yet.</p>`)}
   </div>`;
 }
@@ -1234,10 +1234,11 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   const dark = theme === "dark";
   const b = $("#themeToggle");
-  b.textContent = dark ? "☀️" : "🌙";
+  b.textContent = dark ? "Light" : "Dark";
   b.title = dark ? "Switch to light mode" : "Switch to dark mode";
   b.setAttribute("aria-label", b.title);
-  document.querySelector('meta[name="theme-color"]').content = dark ? "#1b1c1d" : "#ffffff";
+  // the browser bar matches the header band (--theme-color in tokens.css)
+  document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue("--theme-color").trim() || "#8CB9CE";
 }
 applyTheme(document.documentElement.dataset.theme || "light");
 // until someone picks a mode, follow the device's setting
