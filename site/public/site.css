@@ -191,3 +191,81 @@ p { margin: 0; max-width: 60ch; }
   .top .wrap { flex-direction: column; align-items: flex-start; padding-top: var(--s2); }
   .top nav a { min-height: 44px; }
 }
+
+/* ---------- tall tablets (portrait, 700px and wider: iPad mini 768, Surface 960, iPad Pro 1032) ----------
+   The pages are short lists made for wide screens; on a tall screen they left a wall of empty cream. Here the
+   main content fills the height (steps, index rows and the join blocks share it evenly, contents centred), the
+   type steps back up, and sections stack into one column. */
+@media (orientation: portrait) and (min-width: 700px) {
+  body { font-size: 17px; }
+  main { display: flex; flex-direction: column; }
+  .wrap { width: 100%; padding: 0 var(--s6); }
+
+  /* home: the split stays side by side; the index fills the rest */
+  .open { grid-template-columns: 7fr 5fr; min-height: 40vh; }
+  .open-words { padding: var(--s7) var(--s5) var(--s7) var(--s6); }
+  .open h1 { font-size: clamp(44px, 6.6vw, 72px); }
+  .open-panel { padding: var(--s6) var(--s5); }
+  .index { flex: 1; display: flex; padding: var(--s6) 0; }
+  .index .wrap { display: flex; flex-direction: column; gap: var(--s4); }
+  .index h2 { font-size: 30px; }
+  .doors { flex: 1; display: flex; flex-direction: column; }
+  .door { flex: 1; align-content: center; padding: var(--s5) var(--s4); grid-template-columns: 56px minmax(0, 1fr) auto; }
+  .door b { font-size: clamp(28px, 4vw, 40px); }
+  .door .say { font-size: 17px; }
+  .door .go { font-size: 30px; }
+
+  /* every page's title band: title above its line */
+  .band { padding: var(--s7) 0 var(--s6); }
+  .band .wrap { grid-template-columns: 1fr; gap: var(--s4); }
+  .band h1 { font-size: clamp(56px, 8.4vw, 96px); }
+  .band p { font-size: 22px; max-width: 30ch; }
+
+  /* what it is: one column, a size up */
+  .body { padding: var(--s6) 0; }
+  .group .wrap { grid-template-columns: 1fr; gap: var(--s3); }
+  .group h2 { font-size: 34px; }
+  .facts { font-size: 17px; }
+  .facts li { padding: var(--s4) 0; }
+
+  /* how it works: the four steps share the height */
+  .body:has(.steps) { flex: 1; display: flex; }
+  .body:has(.steps) .wrap { display: flex; flex-direction: column; }
+  .steps { flex: 1; display: flex; flex-direction: column; }
+  .steps li { flex: 1; align-content: center; grid-template-columns: 124px minmax(0, 1fr); gap: var(--s2) var(--s5); }
+  .steps li::before { font-size: clamp(80px, 11vw, 112px); }
+  .steps b { font-size: 30px; }
+  .steps span { font-size: 18px; }
+
+  /* pricing: the figures large, the notes fill the rest */
+  .price-figures { margin-top: var(--s7); }
+  .price-figures div { padding: var(--s6) var(--s5) var(--s6) 0; }
+  .price-figures .num { font-size: clamp(96px, 13vw, 150px); }
+  .price-figures .num .todo { font-size: 30px; }
+  .price-figures .label { font-size: 13px; }
+  .price-figures { grid-template-columns: 1fr; }
+  .price-figures div + div { padding-left: 0; border-left: 0; border-top: var(--hair-w) solid var(--hair); }
+  .price-notes { flex: 1; display: flex; align-items: center; padding: var(--s6) 0; }
+  .price-notes .wrap { grid-template-columns: 1fr; }
+  .price-notes .wrap > div { border-top: 0; padding-top: 0; }
+  .price-notes h2 { font-size: 32px; }
+  .price-notes p { font-size: 18px; }
+
+  /* join: the two blocks stacked, each half the height, contents centred */
+  .join-body { flex: 1; display: flex; padding: 0; }
+  .join-body .wrap { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .join-body .wrap > div, .join-body .wrap > div + div {
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start;
+    padding: var(--s6) 0; border-left: 0;
+  }
+  .join-body .wrap > div:first-child { border-top: 0; } /* the band's orange stripe already sits right above it */
+  .join-body h2 { font-size: 44px; margin-bottom: var(--s4); }
+  .join-body p { font-size: 19px; }
+  .button { min-height: 72px; padding: 0 var(--s6); font-size: 15px; }
+  .mail { font-size: clamp(24px, 3.4vw, 32px); }
+
+  /* the next page and the footer, a size up */
+  .next .wrap { padding-top: var(--s6); padding-bottom: var(--s6); }
+  .next b { font-size: clamp(36px, 5vw, 52px); }
+  .foot { font-size: 16px; }
+}
