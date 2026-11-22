@@ -15,11 +15,18 @@ test("scripts and the Worker derive the same binding name", () => {
   assert.equal(vendorBinding(12), "DB_T12");
 });
 
-test("the committed wrangler.toml binds only CONTROL, and sets BASE_DOMAIN", () => {
+test("the committed wrangler.toml binds only CONTROL, and is either pre-launch or fully set for production", () => {
   const base = readBaseToml(join(ROOT, "wrangler.toml"));
   assert.deepEqual(base.d1.map((d) => d.binding), ["CONTROL"]);
   assert.equal(base.d1[0].database_name, "venstock-dev-control");
-  assert.equal(base.vars.BASE_DOMAIN, "localhost");
+  if (base.vars.BASE_DOMAIN === "localhost") {
+    assert.deepEqual(base.routes ?? [], [], "pre-launch: no routes");
+  } else {
+    // Launch settings (docs/before-first-vendor.md, section 3): a real domain, its wildcard route and the real
+    // control database id, all three. Never half of them.
+    assert.equal(productionDomainProblem(base), null);
+    assert.match(base.d1[0].database_id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  }
 });
 
 test("CONTROL plus one binding per vendor with a database; relative paths; vars carried over", () => {
@@ -55,17 +62,18 @@ test("the generated config turns off the workers.dev address and preview URLs", 
 });
 
 // A throwaway repo root with its own wrangler.toml (renderConfig reads ROOT/wrangler.toml).
-import { mkdtempSync, writeFileSync, rmSync, readFileSync as readFile } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { productionDomainProblem } from "../scripts/lib/wrangler-config.mjs";
-function withToml(edit, fn) {
+import { tomlFor } from "./wrangler-toml.mjs";
+function withToml(toml, fn) {
   const dir = mkdtempSync(join(tmpdir(), "venstock-toml-"));
   try {
-    writeFileSync(join(dir, "wrangler.toml"), edit(readFile(join(ROOT, "wrangler.toml"), "utf8")));
+    writeFileSync(join(dir, "wrangler.toml"), toml);
     return fn(dir);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
-const PROD = (t) => t.replace('BASE_DOMAIN = "localhost"', 'BASE_DOMAIN = "shops.example"\n\n[[routes]]\npattern = "*.shops.example/*"\nzone_name = "shops.example"');
+const PROD = tomlFor({ domain: "shops.example" });
 
 test("local configs always use BASE_DOMAIN = localhost and no routes, whatever wrangler.toml says", () => {
   withToml(PROD, (dir) => {
@@ -82,8 +90,19 @@ test("remote configs carry wrangler.toml's BASE_DOMAIN and its wildcard route", 
     assert.match(toml, /\[\[routes\]\]\npattern = "\*\.shops\.example\/\*"\nzone_name = "shops\.example"/);
     assert.match(toml, /^workers_dev = false$/m);
   });
-  withToml((t) => PROD(t).replace('pattern = "*.shops.example/*"', 'pattern = "*.shops.example/*\\"\\n[evil]"'), (dir) => {
+  withToml(PROD.replace('pattern = "*.shops.example/*"', 'pattern = "*.shops.example/*\\"\\n[evil]"'), (dir) => {
+    assert.ok(PROD.includes('pattern = "*.shops.example/*"'), "the fixture has the route this case corrupts");
     assert.throws(() => renderConfig({ root: dir, outDir: dir, control: LOCAL_CONTROL, vendors: [], target: "remote" }));
+  });
+});
+
+test("the deploy (remote) config turns on Workers Logs; local configs don't have the block", () => {
+  withToml(PROD, (dir) => {
+    const remote = renderConfig({ root: dir, outDir: join(dir, "gen"), control: LOCAL_CONTROL, vendors: [], target: "remote" });
+    assert.match(remote, /^\[observability\]\nenabled = true$/m);
+    assert.equal(remote.match(/^\[observability\]$/gm).length, 1);
+    const local = renderConfig({ root: dir, outDir: join(dir, "gen"), control: LOCAL_CONTROL, vendors: [] });
+    assert.doesNotMatch(local, /observability/);
   });
 });
 
@@ -97,6 +116,9 @@ test("nothing remote until BASE_DOMAIN is a real domain with a wildcard route fo
   assert.match(productionDomainProblem(base("shops.example")), /add a \[\[routes\]\] block/);
   assert.match(productionDomainProblem(base("shops.example", [{ pattern: "shops.example/*", zone_name: "shops.example" }])), /\[\[routes\]\]/);
   assert.match(productionDomainProblem(base("shops.example", [{ pattern: "*.other.example/*", zone_name: "other.example" }])), /\[\[routes\]\]/);
-  // The committed wrangler.toml is not set up for production yet, so every remote command refuses.
-  assert.notEqual(productionDomainProblem(readBaseToml(join(ROOT, "wrangler.toml"))), null);
+  // A pre-launch wrangler.toml (localhost, no routes) is refused for remote. Whether the committed file is pre-launch
+  // or fully set is checked by "the committed wrangler.toml binds only CONTROL ..." above.
+  withToml(tomlFor(), (dir) => assert.match(productionDomainProblem(readBaseToml(join(dir, "wrangler.toml"))), /set BASE_DOMAIN/));
+  withToml(tomlFor({ domain: "shops.example", routes: false }), (dir) =>
+    assert.match(productionDomainProblem(readBaseToml(join(dir, "wrangler.toml"))), /add a \[\[routes\]\] block/));
 });

@@ -90,7 +90,9 @@ Deploy: **never by Claude.** The user runs `node scripts/release.mjs` (which onl
 and the deploy itself, following `docs/before-first-vendor.md` and `docs/runbook.md`. `wrangler.toml`'s
 `BASE_DOMAIN` is the production vendor domain (local configs always use `localhost`); every remote script refuses
 until it is a real domain with a `[[routes]]` block for `*.<BASE_DOMAIN>/*`. Generated deploy configs set
-`workers_dev = false` and `preview_urls = false`. Never run the original app's deploy command
+`workers_dev = false`, `preview_urls = false` and `[observability] enabled = true` (Workers Logs; local configs
+don't have the block). The apex will serve Venstock's public site as a separate static-only Worker (`site/`, not
+built yet; rules in `docs/before-first-vendor.md` section 11). Never run the original app's deploy command
 (`npx wrangler pages deploy public --project-name=show-pos`) or anything against `show-pos-db`.
 
 ## Rules
@@ -151,7 +153,8 @@ until it is a real domain with a `[[routes]]` block for `*.<BASE_DOMAIN>/*`. Gen
   and `CONTROL`. Vendor bindings are never committed: scripts write them into `.wrangler-generated/`.
 - `migrations/control/`, `migrations/vendor/`: numbered migrations with `checksums.json`. `migrations/001–004`: history
   of the original single-shop database, never run again.
-- `src/worker.js`: the Worker entry point. Resolves the vendor from the hostname first: 404 unknown/reserved/deleted,
+- `src/worker.js`: the Worker entry point. Resolves the vendor from the hostname first: `www` = 301 to
+  `https://<BASE_DOMAIN>/` (before any registry lookup), 404 unknown/other reserved/deleted,
   500 miswired (logged), 503 being set up, suspended = shell only (API 403); then `/api/*` goes to `src/api.js`
   with only that vendor's database, and everything else is a static file.
 - `src/api.js`: the API handler (`handleApi`): items, shows, sales, settings, export, plus auth/users dispatch.

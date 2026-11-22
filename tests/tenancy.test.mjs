@@ -17,7 +17,7 @@ before(async () => {
     { slug: "crossed", databaseOf: "demo", users: [] },                         // 6: DB_T6 points at demo's database
     { slug: "tampered", registryBinding: "DB_T1", users: [] },                  // 7: registry says DB_T1 (demo's)
     { slug: "gone", status: "deleted" },                                        // 8
-    { slug: "www" },                                                            // 9: a registry row with a reserved slug
+    { slug: "api" },                                                            // 9: a registry row with a reserved slug
   ] });
 });
 after(async () => { await server?.stop(); });
@@ -30,7 +30,9 @@ const API = ["/api", "/api/auth/me", "/api/items"];
 for (const [label, host] of [
   ["unknown vendor", "nosuch.localhost"],
   ["reserved slug (status)", "status.localhost"],
-  ["reserved slug with a registry row (www)", "www.localhost"],
+  ["reserved slug with a registry row (api)", "api.localhost"],
+  ["reserved slug (support)", "support.localhost"],
+  ["under www", "x.www.localhost"],
   ["deleted vendor", "gone.localhost"],
   ["two levels deep", "x.demo.localhost"],
   ["bare BASE_DOMAIN", "localhost"],
@@ -50,12 +52,30 @@ for (const [label, host] of [
 
 test("unknown, reserved and deleted hosts give identical responses (nothing reveals which slugs exist)", async () => {
   for (const p of ["/", "/api/auth/me"]) {
-    const [a, ...others] = await Promise.all(["nosuch", "www", "status", "gone"].map((s) => get(`${s}.localhost`, p)));
+    const [a, ...others] = await Promise.all(["nosuch", "api", "status", "gone"].map((s) => get(`${s}.localhost`, p)));
     for (const o of others) {
       assert.equal(o.text, a.text);
       assert.equal(o.headers["content-type"], a.headers["content-type"]);
     }
   }
+});
+
+test("www.<BASE_DOMAIN> answers 301 to https://<BASE_DOMAIN>/ for every path and method, and never a vendor's data", async () => {
+  for (const host of ["www.localhost", "WWW.localhost"]) {
+    for (const p of [...SHELL, ...API, "/admin", "/api/support/enter"]) {
+      const r = await get(host, p);
+      assert.equal(r.status, 301, `${host}${p}`);
+      assert.equal(r.headers.location, "https://localhost/", `${host}${p}`);
+      assert.equal(r.headers["referrer-policy"], "no-referrer");
+      assert.equal(r.text, "");
+    }
+  }
+  // The forgery rules still come first; a same-origin JSON write is redirected, not handled.
+  assert.equal((await get("www.localhost", "/api/auth/login", { method: "POST", body: "x", headers: { "content-type": "text/plain" } })).status, 415);
+  assert.equal((await get("www.localhost", "/api/auth/login", { method: "POST", body: {}, headers: { "sec-fetch-site": "same-site" } })).status, 403);
+  const login = await loginAt("www.localhost");
+  assert.equal(login.status, 301);
+  assert.equal(login.headers["set-cookie"], undefined);
 });
 
 test("active vendors: shell served, API answers, each sees only its own database", async () => {

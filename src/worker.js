@@ -6,7 +6,8 @@
 //   - suspended vendor: the app shell is served (so the app can say so and the vendor can export failed sales),
 //     every /api request gets 403;
 //   - active vendor: /api goes to the API with ONLY that vendor's database; everything else is a static file;
-//   - admin.<BASE_DOMAIN>: the platform admin page and API (src/platform.js), with ONLY the control database.
+//   - admin.<BASE_DOMAIN>: the platform admin page and API (src/platform.js), with ONLY the control database;
+//   - www.<BASE_DOMAIN>: 301 to https://<BASE_DOMAIN>/ (the public site), decided before any registry lookup.
 // Support sessions (a platform admin looking at one vendor, read-only, 30 minutes) live on the vendor's own host:
 // /api/support/enter swaps the one-time code for a __Host-pos_support cookie; with that cookie, only GET reaches the
 // API, through a read-only database, and every request is written to the audit log.
@@ -88,6 +89,9 @@ async function serve(request, env) {
   switch (v.kind) {
     case "notFound":
       return plain(404, "Not found", api);
+    case "redirect":
+      // www.<BASE_DOMAIN> -> the apex. Nothing was looked up; no-store keeps it changeable later.
+      return new Response(null, { status: 301, headers: { location: v.location, ...NO_STORE } });
     case "refused":
       console.error(`venstock: refused ${url.hostname}: ${v.reason}`);
       return plain(500, "Something went wrong", api);

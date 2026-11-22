@@ -88,6 +88,9 @@ export function renderConfig({ root, outDir, control, vendors, migrationsRoot = 
     "[vars]",
     ...Object.entries(vars).map(([k, v]) => `${k} = ${str(v)}`),
     ...(target === "remote" ? base.routes.flatMap((r) => ["", "[[routes]]", `pattern = ${pattern(r.pattern)}`, `zone_name = ${str(r.zone_name)}`]) : []),
+    // Workers Logs on the deployed Worker: what it logs (method, path, vendor id, error; never request bodies) is kept
+    // and searchable in the dashboard. Local runs print to the terminal and don't need it.
+    ...(target === "remote" ? ["", "[observability]", "enabled = true"] : []),
     "",
     "[[d1_databases]]",
     'binding = "CONTROL"',

@@ -115,9 +115,26 @@ Only after offboarding (above), and after the export has been delivered and conf
 
 ## Restoring a vendor's data
 Each vendor's database can be rolled back on its own (Time Travel keeps 30 days), without touching any other vendor.
-Follow the procedure proven in the launch checklist (drill 8) on `venstock-dev-t<id>`, after agreeing the point in
-time with the vendor. Sales uploaded after that time are lost from the server; devices still holding queued sales
-upload them again.
+The procedure was proven in the launch checklist (drill 8). The database is `venstock-dev-t<id>` (from the staff
+site's vendor list).
+
+**Before any risky manual change** to a vendor database, save the current bookmark:
+```bash
+npx wrangler d1 time-travel info venstock-dev-t<id>     # no timestamp: prints the current bookmark; note it
+```
+Restoring to that bookmark is exact: `npx wrangler d1 time-travel restore venstock-dev-t<id> --bookmark=<bookmark>`.
+
+**Restoring to a point in time** (after agreeing it with the vendor):
+1. Pick a **whole minute** `T` (`YYYY-MM-DDTHH:MM:00Z`, UTC) at least a minute or two **before** the incident but
+   **after** the last data you want to keep. Restore targets resolve to whole minutes, and a timestamp only seconds
+   after the writes can resolve to an older bookmark. Everything written between `T` and the restore is lost.
+2. Check what `T` resolves to, and only go on when it looks right:
+   `npx wrangler d1 time-travel info venstock-dev-t<id> --timestamp=<T>`
+3. Restore (it asks to confirm): `npx wrangler d1 time-travel restore venstock-dev-t<id> --timestamp=<T>`
+4. The restore prints an **"undo" bookmark**. Keep it until the vendor confirms the data is right; restoring to it
+   reverses the restore.
+5. Tell the vendor what was lost (everything the server received after `T`) and what will come back on its own:
+   devices that still hold queued sales upload them again.
 
 ## Venstock staff accounts
 - New staff: `node scripts/create-platform-admin.mjs person@yourcompany.example --remote` (and add them to the
@@ -125,3 +142,18 @@ upload them again.
 - Someone leaves, or a laptop is lost: `node scripts/create-platform-admin.mjs --disable person@yourcompany.example
   --remote`. Their login, sessions and any open support sessions stop at once, and the audit log records it. Remove
   them from the Access policy too. Running the script again without `--disable` re-enables them with a new invite.
+
+## The vendor domain: DNS, email and the public site
+Every subdomain of the vendor domain is "same-site" with every vendor's shop, so the DNS list stays short and
+first-party. Check it after any change (rules: `docs/before-first-vendor.md`, section 11).
+- **Allowed records:** the proxied wildcard `*` (the vendor Worker; `www` answers a 301 to the apex), the proxied
+  apex record (the public site's Worker, `site/`, route `venstock.org/*`), and Zoho Mail's records: `MX` at the
+  apex; SPF, domain verification and DMARC (`_dmarc`) as `TXT`; DKIM as `TXT` at `<selector>._domainkey`.
+- **Email verification is TXT, never CNAME.** A CNAME at a one-level name (e.g. `zb12345678.venstock.org`) takes
+  that name away from the vendor Worker and hands it to a third-party host. Changing mail providers, or adding a
+  sending service: only TXT/MX records, and the same check.
+- **Never** point any subdomain, or the apex, at a third-party host or anything other people can edit.
+- **The public site** (apex) is static files only: no third-party scripts or embeds, a strict
+  `Content-Security-Policy`, no cookies, no D1 bindings. It is a separate Worker and never the vendor Worker.
+- **Account recovery:** the Cloudflare login and the registrar contact use an address that is not on the vendor
+  domain, so a mail or domain problem can't lock you out of fixing it.
