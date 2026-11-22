@@ -91,12 +91,27 @@ test("resolver: active vendor gets exactly its own binding", async () => {
 
 test("resolver: unknown, reserved, deleted and malformed hosts are notFound, without touching vendor databases", async () => {
   const DB_T1 = identityDb(1, "demo");
-  const { resolve, control } = setup([row(1, "demo"), row(2, "gone", "deleted"), row(3, "www")], { DB_T1 });
-  for (const h of ["nosuch.localhost", "www.localhost", "gone.localhost", "localhost", "x.demo.localhost", "demo.example.com", "127.0.0.1"]) {
+  const { resolve, control } = setup([row(1, "demo"), row(2, "gone", "deleted"), row(3, "status")], { DB_T1 });
+  for (const h of ["nosuch.localhost", "status.localhost", "api.localhost", "gone.localhost", "localhost", "x.demo.localhost", "x.www.localhost", "demo.example.com", "127.0.0.1"]) {
     assert.deepEqual(await resolve(h), { kind: "notFound" }, h);
   }
   assert.equal(DB_T1.calls.length, 0);
   assert.ok(control.calls.every((c) => ["nosuch", "gone"].includes(c.args[0])), "reserved and malformed hosts never reach control");
+});
+
+test("resolver: www.<BASE_DOMAIN> redirects to the apex, without the registry or any database", async () => {
+  const DB_T1 = identityDb(1, "demo");
+  const { resolve, env, control } = setup([row(1, "demo"), row(2, "www")], { DB_T1 });
+  assert.deepEqual(await resolve("www.localhost"), { kind: "redirect", location: "https://localhost/" });
+  assert.deepEqual(await resolve("WWW.localhost."), { kind: "redirect", location: "https://localhost/" });
+  env.BASE_DOMAIN = "Shops.Example.";
+  assert.deepEqual(await resolve("www.shops.example"), { kind: "redirect", location: "https://shops.example/" });
+  assert.deepEqual(control.calls, [], "no registry lookup: even a registry row named www is never a vendor");
+  assert.equal(DB_T1.calls.length, 0);
+  // Every other reserved slug is still notFound.
+  for (const slug of ["api", "app", "support", "status", "mail", "help", "docs", "login", "static", "assets", "cdn", "dev", "staging"]) {
+    assert.deepEqual(await resolve(`${slug}.shops.example`), { kind: "notFound" }, slug);
+  }
 });
 
 test("resolver: no BASE_DOMAIN means nothing resolves", async () => {

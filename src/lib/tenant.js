@@ -21,9 +21,11 @@ export const isValidSlug = (s) => typeof s === "string" && SLUG.test(s) && s.sli
 
 // Pure: { kind: "tenant", slug } | { kind: "reserved", slug } | { kind: "none" }. Anything that can't be a vendor
 // slug is "none" here, so it never reaches the control database.
+const normalizeBase = (baseDomain) => String(baseDomain || "").toLowerCase().replace(/^\.|\.$/g, "");
+
 export function parseHost(hostname, baseDomain) {
   const host = String(hostname || "").toLowerCase().replace(/\.$/, "");
-  const base = String(baseDomain || "").toLowerCase().replace(/^\.|\.$/g, "");
+  const base = normalizeBase(baseDomain);
   if (!base || !host.endsWith("." + base)) return { kind: "none" };
   const slug = host.slice(0, -(base.length + 1));
   if (RESERVED_SLUGS.has(slug)) return { kind: "reserved", slug };
@@ -43,10 +45,13 @@ const VERIFIED = new Set();
 //   suspended  app shell only; the API answers 403
 //   active     { tenant, db }
 //   platform   { db }: the admin.<BASE_DOMAIN> host; db is the control database (never a vendor's)
+//   redirect   { location }: www.<BASE_DOMAIN>, sent to https://<BASE_DOMAIN>/ (301)
 export async function resolveVendor(env, hostname, { registry = defaultRegistry, verified = VERIFIED } = {}) {
   const parsed = parseHost(hostname, env.BASE_DOMAIN);
   // admin.<BASE_DOMAIN>: the Venstock platform admin. Its handlers get the control database and nothing else.
   if (parsed.kind === "reserved" && parsed.slug === "admin") return { kind: "platform", db: platformDatabase(env) };
+  // www.<BASE_DOMAIN>: to the public site at the apex. Decided from the hostname alone: no registry, no database.
+  if (parsed.kind === "reserved" && parsed.slug === "www") return { kind: "redirect", location: `https://${normalizeBase(env.BASE_DOMAIN)}/` };
   if (parsed.kind !== "tenant") return { kind: "notFound" };
   const row = await registry.lookup(env, parsed.slug);
   if (!row || row.status === "deleted") return { kind: "notFound" };

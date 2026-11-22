@@ -188,7 +188,8 @@ cd / && rm -rf /tmp/venstock-drill
 - [ ] Deploy with the printed command: `npx wrangler deploy -c .wrangler-generated/remote/wrangler.toml`.
 - [ ] Verify:
   - `https://admin.<domain>/` asks for Cloudflare Access, then shows the staff login; the invite from step 4 works.
-  - `https://made-up-name.<domain>/` answers "Not found".
+  - `https://made-up-name.<domain>/` and `https://status.<domain>/` answer "Not found".
+  - `https://www.<domain>/anything` answers `301` with `location: https://<domain>/`.
   - The response headers include `referrer-policy: no-referrer`; `https://<anything>.workers.dev` doesn't serve it.
   - Onboard a test vendor end to end with `docs/runbook.md` ("Onboarding"), including a support session, then
     abandon or delete it.

@@ -152,7 +152,8 @@ built yet; rules in `docs/before-first-vendor.md` section 11). Never run the ori
   and `CONTROL`. Vendor bindings are never committed: scripts write them into `.wrangler-generated/`.
 - `migrations/control/`, `migrations/vendor/`: numbered migrations with `checksums.json`. `migrations/001–004`: history
   of the original single-shop database, never run again.
-- `src/worker.js`: the Worker entry point. Resolves the vendor from the hostname first: 404 unknown/reserved/deleted,
+- `src/worker.js`: the Worker entry point. Resolves the vendor from the hostname first: `www` = 301 to
+  `https://<BASE_DOMAIN>/` (before any registry lookup), 404 unknown/other reserved/deleted,
   500 miswired (logged), 503 being set up, suspended = shell only (API 403); then `/api/*` goes to `src/api.js`
   with only that vendor's database, and everything else is a static file.
 - `src/api.js`: the API handler (`handleApi`): items, shows, sales, settings, export, plus auth/users dispatch.
