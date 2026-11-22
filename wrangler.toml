@@ -30,4 +30,4 @@ BASE_DOMAIN = "venstock.org"
 [[d1_databases]]
 binding = "CONTROL"
 database_name = "venstock-dev-control"
-database_id = "6001083c-18ca-4c72-a083-908292b4d05b"
+database_id = "9f75c644-3a4f-4780-9c3e-454a06567fff"
