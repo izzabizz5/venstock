@@ -14,7 +14,7 @@ import { handleApi } from "./api.js";
 import { handlePlatformApi } from "./platform.js";
 import { resolveVendor } from "./lib/tenant.js";
 import { enterSupport, supportSession, endSupport, audit } from "./lib/control.js";
-import { readCookie, sessionCookie, SUPPORT_COOKIE } from "./lib/auth.js";
+import { readCookie, sessionCookie, SUPPORT_COOKIE, clientDescription } from "./lib/auth.js";
 import { readOnlyDb } from "./lib/readonly-db.js";
 
 
@@ -115,7 +115,7 @@ async function serve(request, env) {
   if (supportToken) {
     const s = await supportSession(env, supportToken, v.tenant.id);
     if (!s) return Response.json({ error: "This support session has ended." }, { status: 401, headers: { ...NO_STORE, "set-cookie": sessionCookie(SUPPORT_COOKIE, "", 0) } });
-    const where = `${request.method} ${url.pathname}`;
+    const where = `${request.method} ${url.pathname}${url.search}`; // the query too (?show_id=…), never the body
     if (request.method !== "GET") {
       await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.denied", detail: where });
       return Response.json({ error: "Support sessions are read-only." }, { status: 403, headers: NO_STORE });
@@ -145,10 +145,6 @@ function apiRoute(url) {
     return null;
   }
 }
-
-// Who is using a support link, for the audit log: the address Cloudflare saw and the browser (both cut short).
-const clientDescription = (request) =>
-  `ip ${(request.headers.get("cf-connecting-ip") || "unknown").slice(0, 64)}, ua ${(request.headers.get("user-agent") || "none").slice(0, 200)}`;
 
 // POST /api/support/enter { code }: the one-time code from the admin's link, for THIS vendor only.
 // POST /api/support/end: the banner's End button.

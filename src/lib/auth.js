@@ -116,6 +116,10 @@ export function readCookie(request, name) {
   return undefined;
 }
 
+// Who sent a request, for the audit log: the address Cloudflare saw and the browser (both cut short).
+export const clientDescription = (request) =>
+  `ip ${(request.headers.get("cf-connecting-ip") || "unknown").slice(0, 64)}, ua ${(request.headers.get("user-agent") || "none").slice(0, 200)}`;
+
 // What the app needs to know about the person logged in.
 const me = (u, mfaOk) => ({
   email: u.email,

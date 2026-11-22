@@ -1,4 +1,5 @@
 {
   "0001_control.sql": "063ac1b761a0ed7bca10e99e8c29e4cbcc88cf996f5eb7a03591b97489d193cc",
-  "0002_support.sql": "b34339f161e7c2e504cafb5bb2c7a6383012fb5bac0b8cd3a7ef8744e12434b3"
+  "0002_support.sql": "b34339f161e7c2e504cafb5bb2c7a6383012fb5bac0b8cd3a7ef8744e12434b3",
+  "0003_audit_append_only.sql": "de12a21a4d8143d25cecaa4f93bfc1c766c39f1f8302bee02b4e6086ba37217a"
 }

@@ -8,7 +8,7 @@
 //   POST /api/platform/support    { slug, reason } -> a 30-minute, read-only support session and its one-time link
 //   POST /api/platform/support/<id>/end
 //   GET  /api/platform/audit      the latest audit log entries
-import { makeAuth, PLATFORM_REALM, sha256, randomToken } from "./lib/auth.js";
+import { makeAuth, PLATFORM_REALM, sha256, randomToken, clientDescription } from "./lib/auth.js";
 import { SUPPORT_MINUTES } from "./lib/control.js";
 
 const { currentSession, authRoutes } = makeAuth(PLATFORM_REALM);
@@ -22,7 +22,12 @@ export async function handlePlatformApi({ request, db, params }) {
   const m = request.method;
   const body = m === "POST" || m === "PUT" ? await request.json().catch(() => ({})) : {};
   try {
-    if (a === "auth") return await authRoutes({ db, request, b, c, m, body });
+    if (a === "auth") {
+      const before = m === "POST" ? await currentSession(db, request) : null; // a step may end this session
+      const r = await authRoutes({ db, request, b, c, m, body });
+      if (m === "POST") await auditLogin(db, request, { b, c, body, before, ok: r.ok, status: r.status });
+      return r;
+    }
     const sess = await currentSession(db, request);
     if (!sess || !sess.mfa_ok) return fail("Please log in", 401);
     if (a !== "platform") return fail("Not found", 404);
@@ -87,6 +92,22 @@ export async function handlePlatformApi({ request, db, params }) {
     console.error(`venstock: 500 platform ${m} ${url.pathname}: ${e?.stack || e}`);
     return fail("Something went wrong", 500);
   }
+}
+
+// Every staff login step (password, 6-digit code, sign-up, password change, logout), succeeded or not: who (when
+// known), the email typed at the password and sign-up steps, the answer's status and the client. Never a password,
+// code or invite.
+async function auditLogin(db, request, { b, c, body, before, ok, status }) {
+  const step = [b, c].filter(Boolean).join(".");
+  let typed = "", adminId = before?.id ?? null;
+  if (b === "login" || b === "signup") {
+    // Only something shaped like an email: a password typed into the email box must never reach the log.
+    const email = String(body.email ?? "").trim().slice(0, 200);
+    typed = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `${email}; ` : "(not an email); ";
+    if (typed !== "(not an email); ") adminId = (await db.prepare("SELECT id FROM platform_admins WHERE email = ?").bind(email).first())?.id ?? null;
+  }
+  await auditRow(db, { admin_id: adminId, tenant_id: null, support_session_id: null,
+    action: `platform.${step}${ok ? "" : ".failed"}`, detail: `${typed}status ${status}; ${clientDescription(request)}` });
 }
 
 const auditRow = (db, { admin_id, tenant_id, support_session_id, action, detail }) =>

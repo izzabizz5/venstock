@@ -182,3 +182,30 @@ test("a complete login clears the count; a correct password alone gives its try 
   assert.deepEqual(lockRow(), { failed_logins: 0, locked: 0 }, "no invite waiting: nothing to guess, nothing counted");
   await server.client("admin.localhost").login(LOCKME);
 });
+
+// ---------- the audit log ----------
+test("every staff login step is audited (who, status, client), never a password or code", async () => {
+  const fresh = server.client("admin.localhost");
+  const since = server.query("CONTROL", "SELECT COALESCE(MAX(id), 0) AS n FROM audit_log")[0].n;
+  const pw = "a-password-typed-into-the-email-box";
+  await fresh.post("/api/auth/login", { email: pw, password: "whatever-whatever" });
+  await fresh.post("/api/auth/login", { email: PLATFORM_ADMIN.email, password: "wrong-wrong-wrong" });
+  await fresh.login(PLATFORM_ADMIN);
+  await fresh.post("/api/auth/logout", {});
+  const rows = server.query("CONTROL", `SELECT action, admin_id, detail FROM audit_log WHERE id > ${since} ORDER BY id`);
+  const id = server.query("CONTROL", `SELECT id FROM platform_admins WHERE email = '${PLATFORM_ADMIN.email}'`)[0].id;
+  assert.deepEqual(rows.map((r) => [r.action, r.admin_id]), [
+    ["platform.login.failed", null], ["platform.login.failed", id], ["platform.login", id], ["platform.mfa", id], ["platform.logout", id],
+  ]);
+  assert.match(rows[0].detail, /^\(not an email\); status 400; ip \S+, ua /);
+  assert.match(rows[1].detail, new RegExp(`^${PLATFORM_ADMIN.email}; status 400; ip `));
+  const all = JSON.stringify(rows);
+  for (const secret of [pw, "wrong-wrong-wrong", PLATFORM_ADMIN.password]) assert.ok(!all.includes(secret), secret);
+});
+
+test("the audit log can only grow: rows can't be changed or removed", async () => {
+  assert.ok(server.query("CONTROL", "SELECT count(*) AS n FROM audit_log")[0].n > 0);
+  assert.throws(() => server.query("CONTROL", "UPDATE audit_log SET detail = 'rewritten'"), /append-only/);
+  assert.throws(() => server.query("CONTROL", "DELETE FROM audit_log"), /append-only/);
+  assert.equal(server.query("CONTROL", "SELECT count(*) AS n FROM audit_log WHERE detail = 'rewritten'")[0].n, 0);
+});

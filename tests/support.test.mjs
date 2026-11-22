@@ -88,8 +88,10 @@ test("in a support session: reads work, the app is told it's support, and every 
   assert.equal(me.json.support.admin_email, PLATFORM_ADMIN.email);
   assert.equal(me.json.is_admin, true);
   assert.equal((await at("demo.localhost", "/api/users", { headers: { cookie } })).status, 200, "a read-only admin view");
+  await at("demo.localhost", "/api/export?show_id=7", { headers: { cookie } });
   const requests = auditActions().filter((a) => a.action === "support.request").map((a) => a.detail);
   assert.ok(requests.includes("GET /api/items") && requests.includes("GET /api/auth/me"));
+  assert.ok(requests.includes("GET /api/export?show_id=7"), "the query string is recorded too");
   assert.equal(server.query("DB_T1", "SELECT count(*) AS n FROM sessions")[0].n, vendorSessions, "never a session in the vendor's database");
 });
 
