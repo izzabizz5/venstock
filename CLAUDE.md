@@ -45,6 +45,7 @@ node scripts/delete-tenant.mjs <slug> --confirm <slug>        # SOFT delete of a
 node scripts/create-platform-admin.mjs you@example.com        # Venstock staff: invite for http://admin.localhost:8788
 node scripts/create-platform-admin.mjs --disable you@example.com   # staff leaves: no login, sessions + support sessions ended
 node scripts/build-config.mjs                      # write .wrangler-generated/local/wrangler.toml from the registry
+node scripts/seed-demo.mjs [--replace]             # LOCAL ONLY: fill vendor "demo" with items, shows and a day of sales
 node scripts/release.mjs --local                   # release checks; the user runs the remote form, never Claude
 ```
 `suspend-tenant` and `delete-tenant` keep their rules in `scripts/lib/tenant-status.mjs` (pure; status changes are
@@ -85,14 +86,18 @@ npm run test:full                   # everything (about 1 minute): before each c
 - `tests/config.mjs` is the only place that says how the app is started.
 - `tests/harness.mjs` seeds users with known passwords and authenticator secrets and logs in with real 6-digit codes.
 - Checks that need a real browser are listed in `tests/MANUAL.md`.
+- The design rules are tests in `test:fast`: `tests/design.unit.test.mjs` (radius, shadows, gradients, fonts, colours
+  only in tokens, no emoji icons, font budget, sw.js shell list), `tests/contrast.unit.test.mjs` (every `@pair` in
+  `public/tokens.css`, light and dark) and `tests/site.unit.test.mjs` (the public site's CSP and isolation).
 
 Deploy: **never by Claude.** The user runs `node scripts/release.mjs` (which only prints the deploy and tag commands)
 and the deploy itself, following `docs/before-first-vendor.md` and `docs/runbook.md`. `wrangler.toml`'s
 `BASE_DOMAIN` is the production vendor domain (local configs always use `localhost`); every remote script refuses
 until it is a real domain with a `[[routes]]` block for `*.<BASE_DOMAIN>/*`. Generated deploy configs set
 `workers_dev = false`, `preview_urls = false` and `[observability] enabled = true` (Workers Logs; local configs
-don't have the block). The apex will serve Venstock's public site as a separate static-only Worker (`site/`, not
-built yet; rules in `docs/before-first-vendor.md` section 11). Never run the original app's deploy command
+don't have the block). The apex serves Venstock's public site as a separate static-assets-only Worker (`site/`: its own
+`wrangler.toml`, no code, no bindings, route `venstock.org/*`; rules in `docs/before-first-vendor.md` section 11). The
+user deploys it from `site/`; Claude never does, and never adds a deploy script for it. Never run the original app's deploy command
 (`npx wrangler pages deploy public --project-name=show-pos`) or anything against `show-pos-db`.
 
 ## Rules
@@ -141,6 +146,14 @@ built yet; rules in `docs/before-first-vendor.md` section 11). Never run the ori
   cancel vendor B's data (by id, and through B's hostname with A's cookie). It must fail.
 - Never commit secrets, `.dev.vars`, `.env`, `.wrangler/` or `.wrangler-generated/`.
 - Keep changes small: one logical change per commit.
+- Design (`docs/design.md`, direction A "Field"): colours, type, space and rule widths are defined only in
+  `public/tokens.css` (`site/public/tokens.css` is an exact copy); other CSS uses `var()` only. `border-radius` is
+  0 everywhere; no box-shadow with a blur, no gradients, no backdrop blur, no hover lifts; no emoji as icons. Two
+  self-hosted OFL fonts (Archivo, Fraunces) in `public/fonts/` (150 KB budget, licences alongside); no font or CDN
+  requests. Every text colour pair is declared as an `@pair` in tokens.css and must meet WCAG AA in light and dark.
+  Tap targets are 48px or more; orange is the one main action per section; colour is never the only signal.
+  Respect `prefers-reduced-motion`. Front-end restyles change CSS, not markup or behaviour: keep every id, class and
+  data attribute that `app.js`, `admin.js` or tests use.
 - Test runs: while iterating, run only the test file(s) for the code you changed, or `npm run test:fast`. Run
   `npm run test:full` before every commit and at every STOP point, never after every edit. Mutation checks only for
   isolation-critical code (the resolver, the identity check, the binding derivation, the lockdown), not for routine
@@ -182,6 +195,12 @@ built yet; rules in `docs/before-first-vendor.md` section 11). Never run the ori
 - `.claude/`: Claude Code guardrails (deny rules and a hook that block remote and deploy commands).
 - `public/`: the PWA front end: `index.html`, `app.js` (all screens + offline sale queue), `sync.js` (upload and
   offline rules shared with the service worker: only 400/422 mark a sale failed; the shell caches only 2xx and
-  falls back to the cache on 500/502/503/504), `style.css`, `sw.js` (app-shell cache), `manifest.webmanifest`,
-  `vendor/qrcode.js`. Bump `CACHE` in `sw.js` whenever a shell file changes.
+  falls back to the cache on 500/502/503/504), `tokens.css` (the design tokens), `style.css`, `fonts/` (Archivo,
+  Fraunces, OFL), `sw.js` (app-shell cache), `manifest.webmanifest`, `vendor/qrcode.js`. Bump `CACHE` in `sw.js`
+  whenever a shell file changes, and add any new shell file to its `SHELL` list (a test checks).
+- `site/`: Venstock's public site at the apex, a separate static-assets-only Worker (`site/wrangler.toml`,
+  `site/public/`: pages, `site.css`, `_headers` with the CSP, copies of `tokens.css` and the fonts).
+- `docs/design.md`: the design system (palette, contrast, type, rules). `design/preview/`: the two direction
+  previews (A was chosen). `design/reference/` is gitignored third-party artwork: never commit it.
+- `scripts/seed-demo.mjs`: local-only demo data for vendor "demo" (refuses any remote target before opening anything).
 - `README.md`: what Venstock is, the vendor guide, how it works, local development and tests.

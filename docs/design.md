@@ -1,8 +1,9 @@
 # Venstock design
 
-The visual system for the vendor app (`public/`), the staff admin page, and the public site (`site/`). The
-direction is still to be chosen (see "Directions" below). Once it is, this file records the final tokens, and
-`public/tokens.css` is the only place they are defined.
+The visual system for the vendor app (`public/`), the staff admin page, and the public site (`site/`). The chosen
+direction is **A, "Field"** (see "Direction" below). `public/tokens.css` is the only place colours, type, space and
+rule widths are defined; `site/public/tokens.css` is an exact copy (a test checks); every other stylesheet uses
+`var()` only.
 
 ## The reference, and what we take from it
 The mood board (`design/reference/mood.png`, gitignored: it is someone else's artwork) is a reference for mood
@@ -60,8 +61,43 @@ Sampled from the board, plus three derived colors the board doesn't have but a r
 | dark muted on dark ground | 8.6 | body |
 | dark brick on dark ground | 7.1 | body |
 
-`tests/contrast.unit.test.mjs` checks every pair declared in `public/tokens.css`. That test arrives with the
-tokens file, in the first apply stage.
+`tests/contrast.unit.test.mjs` checks every `@pair` declared at the top of `public/tokens.css`, in light and dark,
+and fails if a stylesheet uses a text colour that no pair declares. To add a colour pairing, declare it there first.
+
+### Roles (what style.css actually uses)
+Components never use a palette colour directly; they use a role, and each role has a light and a dark value.
+
+| Role | Light | Dark | Used for |
+|------|-------|------|----------|
+| `--page`, `--text`, `--text-2` | cream, ink, muted ink | dark ground, cream, dark muted | the page and its text |
+| `--surface` | cream | dark surface | popups, sheets |
+| `--band`, `--on-band` | sky, ink | dark surface, cream | the header band |
+| `--panel`, `--on-panel`, `--panel-hair` | deep blue, cream | same | the order panel, totals, the running show |
+| `--tile`, `--tile-on`, `--hair` | cream, sky, sage | ground, dark surface, dark line | item tiles, selected tile, hairlines |
+| `--edge`, `--rule` | ink | dark muted, cream | control edges (2px), structural rules (6px) |
+| `--mark`, `--on-mark` | mustard, ink | same | active filter, deals, notices, invites, support banner |
+| `--action`, `--on-action`, `--action-edge` | orange, ink, ink | orange, ink, orange | the one main action |
+| `--invert-bg`, `--invert-fg` | ink, cream | cream, ink | current tab, badges, toast, header warnings |
+| `--danger`, `--alert-bg`, `--on-alert` | brick, brick, cream | dark brick, dark brick, ink | errors and failed sales |
+| `--focus`, `--focus-on-panel` | ink, cream | cream, cream | the 3px square focus outline |
+
+## Type scale, space and rules
+| Token | Value | Use |
+|-------|-------|-----|
+| `--fs-label` | 12px | tracked uppercase labels and navigation |
+| `--fs-s` | 14px | secondary text |
+| `--fs-m` | 16px | body (inputs never go below 16px on phones, so they don't zoom) |
+| `--fs-l` | 20px | small headings |
+| `--fs-xl` | 28px | section and popup headings |
+| `--fs-2xl` | 40px | page titles |
+| `--fs-total` | 52px | the sale total (42–44px on small screens) |
+| `--s1`…`--s7` | 4, 8, 12, 16, 24, 32, 48px | the only spacing steps |
+| `--tap` | 48px | minimum height and width of anything tappable |
+| `--hair-w`, `--edge-w`, `--rule-w` | 2px, 2px, 6px | hairlines, control edges, structural rules |
+| `--header-h`, `--panel-w`, `--banner-h` | 64px, 400px, 48px | header (56px on phones), order panel, support banner |
+
+**Why:** a point of sale used outdoors needs big targets, big numbers and high contrast before anything else. A
+few spacing steps and three rule weights give the hard-edged, ruled look without boxes or shadows.
 
 ## Type
 Two families, both under the SIL Open Font License, self-hosted as subsetted Latin WOFF2 (71 KB together; the
@@ -101,27 +137,29 @@ without a third family.
   `prefers-reduced-motion`.
 - **No emoji as icons.** The theme toggle reads "Dark" / "Light".
 
-## Directions (choose one)
-Both previews show login, the sale register and the items list, in light and dark. Serve the repo root locally
-and open them (browsers block fonts from `file://`):
+## Direction: A, "Field" (chosen 2026-11-22)
+The screen is built from flat color fields; a change of color stands in for a border.
+- **Header:** a sky band. The current tab is an ink block. On phones the tabs move to a bar along the bottom.
+  The staff admin page uses an ink header instead, so it can never be mistaken for a vendor's shop.
+- **Sell:** cream item tiles separated by sage gaps; an item in the order fills sky blue with a count in its
+  corner. The order panel is the deep-blue "money field" with the largest number on screen, the total, and the
+  orange Complete sale. On phones the order is a sheet opened from a deep-blue bar above the tabs.
+- **Other screens:** ruled sections (a 6px rule and a serif heading) with hairline rows. Repeated per-row buttons
+  are dark or outlined, so orange stays one main action per section. Deep blue marks money (show totals, the
+  running show). Mustard marks deals, notices, invites, the support banner and the support-link countdown. Brick
+  marks failed sales, always with words.
+- **Login:** a deep-blue field with the stacked wordmark beside the form (above it on phones).
+- **Public site:** the same tokens and fonts. Full-width bands, an asymmetric heading/content grid, and the
+  product's own order panel drawn in HTML. No images, no third-party anything.
+
+**B, "Ledger"** (cream, ink, ruled rows, a category rail) was the alternative. It was calmer, but its rows are
+smaller targets than A's tiles for fast tapping at a busy table.
+
+Both previews stay in `design/preview/` for reference. Serve the repo root to open them (browsers block fonts
+from `file://`):
 
 ```bash
 python3 -m http.server 8000 --bind 127.0.0.1
 # http://127.0.0.1:8000/design/preview/a.html   (add #dark for dark mode, or use the button)
 # http://127.0.0.1:8000/design/preview/b.html
 ```
-
-- **A: Field.** The screen is built from flat color fields: a sky header band, a cream catalog, a deep-blue
-  order panel with a huge cream total, and orange for Complete sale. Items are tiles separated by sage gaps,
-  and a selected item fills sky blue. Mustard marks the active category and deals. Login is a 5/7 split with a
-  deep-blue field holding the stacked wordmark.
-  Pros: very legible at arm's length in sun; quick to scan by color; tiles suit fast tapping.
-  Cons: louder; more color to keep balanced on the busier screens.
-- **B: Ledger.** Cream paper, ink, and thick rules instead of boxes. Categories sit in a left rail, items are
-  ruled rows, and the order panel is separated by a 6px rule. Color appears only where the money is: a
-  deep-blue block for the total, orange for the action. Login sets the lowercase wordmark huge along the
-  bottom, with the form in a narrow ruled column.
-  Pros: calmer and more distinctive; rows fit long item names and more items per screen.
-  Cons: rows are a smaller target than tiles for fast tapping; relies more on type than on color.
-
-Not yet decided: A, B, or a mix (for example B's register rows with A's header band).

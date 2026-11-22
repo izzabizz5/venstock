@@ -101,6 +101,8 @@ npx wrangler dev -c .wrangler-generated/local/wrangler.toml --persist-to .wrangl
 Open the invite link (`http://demo.localhost:8788/#invite=…`), set a password, and scan the QR code with an
 authenticator app. Plain `http://localhost:8788` answers "Not found": only a shop's own address serves the app.
 
+- Demo data: `node scripts/seed-demo.mjs` fills `demo` with items, shows, upcoming shows and a day of sales (local
+  only; `--replace` wipes demo's existing items, shows, sales and settings first).
 - Locked out: `node scripts/add-admin.mjs --tenant demo you@example.com` prints a fresh invite.
 - After creating another shop, restart `wrangler dev` (it connects databases when it starts).
 - After pulling new migrations: `node scripts/migrate.mjs`.
@@ -114,7 +116,19 @@ npm run test:full                   # everything, including real local servers a
 node --test tests/<file>.test.mjs   # one file, while working on it
 ```
 Every test uses its own throwaway local databases. Use `test:fast` for quick checks while editing; run `test:full`
-before every commit. Checks that need a real browser are listed in `tests/MANUAL.md`.
+before every commit. Checks that need a real browser are listed in `tests/MANUAL.md`. The design rules (no rounded
+corners, colours only from `public/tokens.css`, WCAG AA contrast in light and dark, the public site's CSP) are tests
+too, in `test:fast`.
+
+### Design
+[docs/design.md](docs/design.md) describes the look: palette and contrast, the two typefaces (Archivo and Fraunces,
+self-hosted), and the rules. The design previews are in `design/preview/`; serve the repo root to view them:
+`python3 -m http.server 8000 --bind 127.0.0.1`, then `http://127.0.0.1:8000/design/preview/a.html`.
+
+### The public site
+`site/` is Venstock's own website at the bare domain (`venstock.org`): a separate Worker that serves only static
+files, with a strict Content-Security-Policy. Preview it with `cd site && npx wrangler dev` (http://localhost:8790).
+Text still to write is marked TODO in `site/public/`.
 
 ### Database changes
 Schema changes are new numbered files in `migrations/vendor/` (every shop's database) or `migrations/control/`.
@@ -136,9 +150,11 @@ support sessions, suspending, exporting and deleting.
 - `src/api.js` and `src/lib/`: the shop API (items, shows, sales, settings, users), logins, the resolver, the
   control-database code, sale recording, validation, and the read-only database used in support sessions.
 - `src/platform.js`: the staff API at `admin.<domain>`.
-- `public/`: the shop app (`index.html`, `app.js`, `sync.js`, `sw.js`, `style.css`) and the staff page (`admin.html`,
-  `admin.js`).
+- `public/`: the shop app (`index.html`, `app.js`, `sync.js`, `sw.js`, `tokens.css`, `style.css`, `fonts/`) and the
+  staff page (`admin.html`, `admin.js`).
+- `site/`: the public website at the bare domain (a separate, static-only Worker).
+- `design/preview/`: design direction previews (`design/reference/` is local only and never committed).
 - `scripts/`: create, suspend and delete shops, add staff, run migrations, build the deploy config, prepare a release.
 - `migrations/`: `control/` and `vendor/` migrations with checksums (`001`–`004`: history of the original app).
 - `tests/`: automated tests (`node --test`) and `tests/MANUAL.md`.
-- `docs/`: the launch checklist and the runbook.
+- `docs/`: the launch checklist, the runbook and the design system.

@@ -82,6 +82,9 @@ These don't exist yet. Each needs code, tests and review (ask Claude to build th
   `site/` with its own `wrangler.toml`, static assets only, no D1 bindings, route `venstock.org/*`, never the vendor
   Worker. Its pages load no third-party scripts or embeds, send a strict `Content-Security-Policy` (only its own
   files), and set no cookies (see 11).
+  Built: `site/` (checked by `tests/site.unit.test.mjs`). Still to do, by you: fill in everything marked TODO in
+  `site/public/` (headline, monthly price, Stripe payment link, contact address, terms, privacy, the onboarding
+  steps), then deploy it from `site/` (`npx wrangler deploy` there) once the vendor Worker's wildcard route is live.
 
 ## 7. Drill: a remote migration that fails halfway keeps nothing
 Locally, a failing migration file is rolled back completely (`tests/migrate.test.mjs`). Cloudflare documents the
