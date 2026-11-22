@@ -26,6 +26,6 @@ BASE_DOMAIN = "venstock.org"
 # scripts write them into .wrangler-generated/ from the registry. Remote name must stay venstock-dev-control; set
 # database_id after creating it (you, not Claude).
 [[d1_databases]]
-binding = "venstock_dev_control"
+binding = "6001083c-18ca-4c72-a083-908292b4d05b"
 database_name = "venstock-dev-control"
 database_id = "6001083c-18ca-4c72-a083-908292b4d05b"
