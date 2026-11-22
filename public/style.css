@@ -104,11 +104,17 @@ header {
 }
 .empty { grid-column: 1 / -1; margin: 0; padding: var(--s5) var(--s4); background: var(--tile); }
 
-/* order panel: the deep-blue money field */
+/* order panel: the deep-blue money field. A grid: the ordered items take all the height the compact bottom part
+   (deals, totals, payment + notes side by side, Complete sale, Clear cart) leaves them. */
 .order {
-  position: sticky; top: var(--header-h); height: calc(100vh - var(--header-h)); display: flex; flex-direction: column; gap: var(--s3);
-  padding: var(--s5); background: var(--panel); color: var(--on-panel); overflow-y: auto;
+  position: sticky; top: var(--header-h); height: calc(100vh - var(--header-h));
+  display: grid; grid-template-columns: 104px minmax(0, 1fr); grid-template-rows: auto minmax(96px, 1fr); grid-auto-rows: auto;
+  gap: var(--s2); padding: var(--s5); background: var(--panel); color: var(--on-panel); overflow-y: auto;
 }
+.order > * { grid-column: 1 / -1; min-width: 0; }
+.order > #payment { grid-column: 1; }
+.order > #notes { grid-column: 2; }
+.order > #notes::placeholder { font-size: 13px; }
 .order :focus-visible { outline-color: var(--focus-on-panel); }
 .order .label { color: var(--on-panel); }
 .order-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
@@ -119,7 +125,7 @@ header {
 .order ::placeholder { color: var(--on-panel); opacity: .8; }
 #register { font-size: var(--fs-label); font-weight: 700; font-stretch: var(--wide); letter-spacing: .1em; text-transform: uppercase; }
 .sheet-close, .sheet-backdrop { display: none; }
-.lines { flex: 1; min-height: 80px; overflow-y: auto; border-top: var(--hair-w) solid var(--on-panel); }
+.lines { min-height: 0; overflow-y: auto; border-top: var(--hair-w) solid var(--on-panel); border-bottom: var(--hair-w) solid var(--on-panel); }
 .empty-cart { margin: var(--s5) 0; color: var(--on-panel); font: 700 18px/1.3 var(--font-serif); }
 /* a line: name and amount on top, the steppers and Remove under them */
 .line {
@@ -139,18 +145,18 @@ header {
   grid-area: x; justify-self: end; min-width: var(--tap); min-height: var(--tap); padding: 0 var(--s2); border: 0; background: none;
   color: var(--on-panel); font-size: 24px; line-height: 1;
 }
-.deals-box { display: flex; flex-direction: column; gap: var(--s2); }
-.deals-box .label { margin: 0; }
+.deals-box { display: flex; flex-direction: column; gap: var(--s1); margin-top: var(--s1); }
+.deals-box .label { margin: 0; font-size: 11px; }
 .deals-box select, .disc-val, #payment, #notes { width: 100%; font-size: var(--fs-m); }
 .deal-list { margin: 0; padding: 0; list-style: none; }
 .deal-list li {
-  display: flex; justify-content: space-between; gap: var(--s2); padding: var(--s2) var(--s3); background: var(--mark); color: var(--on-mark);
-  font-weight: 600; font-variant-numeric: tabular-nums;
+  display: flex; justify-content: space-between; gap: var(--s2); padding: var(--s1) var(--s3); background: var(--mark); color: var(--on-mark);
+  font-size: var(--fs-s); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .deal-list li + li { margin-top: var(--hair-w); }
-.hint { margin-top: var(--s2); padding-left: var(--s3); border-left: var(--rule-w) solid var(--mark); font-size: var(--fs-s); }
+.hint { margin-top: var(--s1); padding-left: var(--s3); border-left: var(--rule-w) solid var(--mark); font-size: var(--fs-s); }
 .totals { font-variant-numeric: tabular-nums lining-nums; }
-.trow { display: flex; justify-content: space-between; gap: var(--s3); padding: 2px 0; }
+.trow { display: flex; justify-content: space-between; gap: var(--s3); padding: 1px 0; }
 .trow.grand {
   align-items: baseline; margin-top: var(--s2); padding-top: var(--s2); border-top: 3px solid currentColor;
 }
@@ -161,14 +167,20 @@ header {
   width: 100%; min-height: 64px; padding: var(--s3); border: var(--edge-w) solid var(--action-edge);
   background: var(--action); color: var(--on-action); font-size: 15px;
 }
-.order .complete { min-height: 72px; border-color: var(--action); }
+.order .complete { min-height: 52px; padding: var(--s2); border-color: var(--action); font-size: 14px; }
 .complete:disabled { background: none; color: inherit; border-style: dashed; border-color: currentColor; opacity: .7; cursor: default; }
 .link {
   min-height: var(--tap); padding: 0 var(--s1); border: 0; background: none; color: inherit; font-size: var(--fs-s);
   text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px;
 }
 .link.danger { color: var(--danger); }
-.order .link, .order .link.danger { color: var(--on-panel); align-self: flex-start; }
+/* Clear cart: a centred outlined button, clearly a button but quieter than Complete sale */
+.order .link, .order .link.danger { color: var(--on-panel); }
+.order > .link.danger {
+  justify-self: center; min-height: 44px; padding: 0 var(--s5); border: var(--edge-w) solid var(--on-panel); background: none;
+  font-size: var(--fs-label); font-weight: 700; font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase;
+  text-decoration: none;
+}
 .cart-bar { display: none; }
 
 /* ---------- popups: checkout and restock ---------- */
@@ -181,8 +193,7 @@ header {
   width: 100%; max-width: 460px; max-height: calc(100vh - 32px); overflow-y: auto; display: flex; flex-direction: column; gap: var(--s3);
   padding: var(--s5); background: var(--surface); color: var(--text); border: 3px solid var(--rule);
 }
-.modal > *, .order > * { flex-shrink: 0; } /* scroll the popup instead of squashing its parts */
-.order > .lines { flex-shrink: 1; }
+.modal > * { flex-shrink: 0; } /* scroll the popup instead of squashing its parts */
 .modal-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3); padding-bottom: var(--s3); border-bottom: var(--rule-w) solid var(--rule); }
 .modal-head h2 { margin: 0; font-size: var(--fs-xl); }
 .modal select, .modal textarea, .modal input {
@@ -509,7 +520,7 @@ body[data-screen="admin"] .page > svg { display: block; width: 216px; height: au
   .order-head { gap: var(--s2); }
   .order-head h2 { font-size: 22px; margin-right: auto; }
   #register { max-width: 40vw; }
-  .lines { flex: none; min-height: 0; max-height: 34vh; }
+  .lines { max-height: 46vh; }
   .empty-cart { margin: var(--s3) 0; }
   .sheet-backdrop {
     display: block; position: fixed; inset: 0; z-index: 35; border: 0; padding: 0; background: var(--scrim);
