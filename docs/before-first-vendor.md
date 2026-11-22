@@ -185,7 +185,7 @@ cd / && rm -rf /tmp/venstock-drill
 - [ ] Written down and agreed (fill in the decision from 1):
   - A **suspended** vendor's data is kept as is; they can still open the app and export failed sales.
   - A vendor that **leaves** gets their export first (`docs/runbook.md`, "Offboarding"), then is marked deleted.
-  - A **deleted** vendor's database is kept for ______ days (at least until the export has been delivered and
+  - A **deleted** vendor's database is kept for 30 days (at least until the export has been delivered and
     confirmed), then dropped by hand. Dropping is permanent; Time Travel can't bring back a deleted database.
   - The control database's audit log is kept forever (it is append-only; nothing can change or remove a row).
   - Venstock staff accounts that leave are disabled (`create-platform-admin.mjs --disable`), never deleted, so
