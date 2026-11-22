@@ -6,19 +6,18 @@ sales on the device and uploads them when signal returns. It runs as one Cloudfl
 `public/` as static assets, with D1 (SQLite). It moved off Cloudflare Pages because Pages can't serve wildcard
 subdomains, which multi-tenancy needs (one subdomain per vendor).
 
-It started as a single-vendor app called "Show POS". It is being turned into **Venstock**, a multi-tenant product
-where **each vendor has its own D1 database**:
+It started as a single-vendor app called "Show POS" (that name survives only in `migrations/001-004` and in tests
+that use `show-pos-db` as a database name that must be refused). **Venstock** is the multi-tenant product, where
+**each vendor has its own D1 database**:
 - a **control** database (binding `CONTROL`) holds the vendor registry and Venstock staff;
 - each vendor's database (binding `DB_T<id>`) holds that vendor's items, shows, sales, settings, users and sessions;
 - a request's hostname `<slug>.<BASE_DOMAIN>` → registry → `DB_T<id>` → that one database. Nothing else.
 - `admin.<BASE_DOMAIN>` is the Venstock platform admin (staff in the control database). Staff see a vendor's data
   only through a **support session**: read-only, 30 minutes, with a reason, on the vendor's own host, audited.
 
-**In progress** (branch `multitenant-d1`): migrations, the runner, the scripts and the hostname resolver exist, and
-`handleApi` receives only `{ request, db, tenant, params }` (locked down, with source tests), every API area (auth,
-items, settings, shows, sales, users) has cross-vendor tests, failed uploads have their own screen, and the platform
-admin with support sessions exists. Next: docs and polish (step 13). Old names (`show-pos`, `show-pos-db`, "show
-pos") still appear.
+**Status:** the multi-tenant build is complete on branch `multitenant-d1` (never merged to main) and has **never been
+deployed**. `docs/before-first-vendor.md` is the launch checklist; `docs/runbook.md` the per-vendor operations.
+Some things can only be verified on a real Cloudflare deploy; the launch checklist's drills and step 10 cover them.
 
 **Registry cache:** the Worker caches each hostname's registry lookup in the isolate for 45 seconds
 (`src/lib/control.js`), unknown vendors included. A suspension, unsuspension or new vendor takes effect within
@@ -72,7 +71,7 @@ npm run test:full                   # everything (about 1 minute): before each c
 ```
 - `*.unit.test.mjs` must never start wrangler or open a database. Anything that does belongs in a plain `*.test.mjs`.
 - Mutation checks (break a rule, confirm a test fails) only for isolation-critical code: the resolver, the identity
-  check, the binding derivation, the lockdown. Never weaken an assertion to make a test faster.
+  check, the binding derivation, the lockdown, support sessions. Never weaken an assertion to make a test faster.
 - Local database files are read and written directly (`scripts/lib/local-d1.mjs`, checked against real wrangler by
   `tests/local-d1.test.mjs`); starting wrangler costs about 5 s, so tests start it only for `wrangler dev` and
   `d1 migrations apply`.
@@ -80,8 +79,12 @@ npm run test:full                   # everything (about 1 minute): before each c
 - `tests/harness.mjs` seeds users with known passwords and authenticator secrets and logs in with real 6-digit codes.
 - Checks that need a real browser are listed in `tests/MANUAL.md`.
 
-Deploy: **not set up for Venstock. Don't deploy unless explicitly asked.** Never run the original app's deploy
-command (`npx wrangler pages deploy public --project-name=show-pos`) or anything against `show-pos-db`.
+Deploy: **never by Claude.** The user runs `node scripts/release.mjs` (which only prints the deploy and tag commands)
+and the deploy itself, following `docs/before-first-vendor.md` and `docs/runbook.md`. `wrangler.toml`'s
+`BASE_DOMAIN` is the production vendor domain (local configs always use `localhost`); every remote script refuses
+until it is a real domain with a `[[routes]]` block for `*.<BASE_DOMAIN>/*`. Generated deploy configs set
+`workers_dev = false` and `preview_urls = false`. Never run the original app's deploy command
+(`npx wrangler pages deploy public --project-name=show-pos`) or anything against `show-pos-db`.
 
 ## Rules
 - Never run any wrangler command with `--remote` in this repo, and never deploy, unless explicitly asked.
@@ -100,14 +103,22 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 - Support sessions: started only at the admin host (reason required, active vendors only); the one-time link works
   once, only at that vendor's host; the `__Host-pos_support` cookie is valid only there, until it ends or 30 minutes
   pass. Anything but GET is refused (403) before a handler runs, and handlers get `readOnlyDb()`, which allows only
-  single SELECT statements. Every step and every request goes to `audit_log` in control; request bodies never do.
+  single SELECT statements and never account secrets (password hashes, authenticator secrets, invites) or the
+  sessions table; every support response also passes through `redactForSupport()` (`src/lib/redact.js`), and
+  `tests/support-secrets.test.mjs` walks every GET route (its list must match the GET handlers in the source).
+  The one-time link must be opened within 60 seconds; its code stays in the URL fragment (never sent to a server,
+  never logged) and is POSTed by the page, never put in a query string. Codes and cookies are stored only hashed.
+  Every step and every request goes to `audit_log` in control (append-only: triggers refuse updates and deletes);
+  request bodies never do.
   A vendor's admins see every support session on their shop at `GET /api/account/support-sessions` (served by
   `src/worker.js` from control, for the hostname's vendor only; refused inside a support session).
 - Every request except GET/HEAD must be `Content-Type: application/json` (415 otherwise) and, when the browser sends
   `Sec-Fetch-Site`, `same-origin` (403 otherwise): sibling subdomains are same-site, so SameSite cookies alone don't
   stop forged writes (`src/worker.js` `refuseForgedRequest`). GET requests never change anything.
-- Session cookies use the `__Host-` prefix (`__Host-pos_session`; the platform admin its own name), with Secure,
-  HttpOnly, SameSite=Strict, Path=/ and never a Domain; only the exact name is read.
+- Session cookies use the `__Host-` prefix (`__Host-pos_session`, `__Host-pos_platform`, `__Host-pos_support`), with
+  Secure, HttpOnly, SameSite=Strict, Path=/ and never a Domain; only the exact name is read. Staff logins last 12
+  hours; staff accounts are disabled (`create-platform-admin.mjs --disable`), never deleted.
+- Every response carries `Referrer-Policy: no-referrer` (and both pages have the matching meta tag).
 - Vendor slugs: 3-32 of `a-z 0-9 -`, no hyphen at either end, never `--` in positions 3-4 (`xn--` look-alikes).
   `isValidSlug` in `src/lib/tenant.js` is the one rule for `create-tenant` and the hostname parser.
 - Server errors answer a generic "Something went wrong" (500). Details go to the log only: method, path, vendor id
@@ -129,7 +140,8 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
 
 ## Project layout
 - `wrangler.toml`: Worker name, entry point, static assets (`run_worker_first = true`), dev port 8788,
-  `BASE_DOMAIN` (`localhost`; the real domain must be set before any deploy) and `CONTROL`. Vendor bindings are never committed: scripts write them into `.wrangler-generated/`.
+  `BASE_DOMAIN` (the production vendor domain; `localhost` until launch), the wildcard `[[routes]]` (added at launch)
+  and `CONTROL`. Vendor bindings are never committed: scripts write them into `.wrangler-generated/`.
 - `migrations/control/`, `migrations/vendor/`: numbered migrations with `checksums.json`. `migrations/001–004`: history
   of the original single-shop database, never run again.
 - `src/worker.js`: the Worker entry point. Resolves the vendor from the hostname first: 404 unknown/reserved/deleted,
@@ -144,7 +156,8 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   support sessions; the audit log).
 - `src/platform.js`: the platform admin API at `admin.<BASE_DOMAIN>` (staff login, vendors, support sessions, audit
   log). `public/admin.html` and `public/admin.js` are its page (no offline mode).
-- `src/lib/readonly-db.js`: the read-only database wrapper used in support sessions.
+- `src/lib/readonly-db.js`: the read-only database wrapper used in support sessions; `src/lib/redact.js`: strips
+  account secrets from every support-session response.
 - `src/lib/validate.js`: pure request validation (restock, sale uploads).
 - `src/lib/sales.js`: records an uploaded sale: idempotent per `client_id`, priced from the vendor's own items
   (current price; the device's discount is capped at the subtotal), unknown items or show = 422, one atomic batch.
@@ -153,10 +166,12 @@ command (`npx wrangler pages deploy public --project-name=show-pos`) or anything
   (`d1-target.mjs`), the executors (`executor.mjs`, `local-d1.mjs`), the generated-config writer and the checksum
   manifest code.
 - `tests/`: `node --test` harness and tests; `tests/MANUAL.md` for browser-only checks.
-- `docs/before-first-vendor.md`: what must exist before any paying vendor is onboarded (including drills you run).
+- `docs/before-first-vendor.md`: the ordered launch checklist (decisions, Cloudflare setup, control database, drills,
+  retention, first release). `docs/runbook.md`: onboarding, "being set up", support sessions, suspending, export,
+  deleting, restoring, staff accounts.
 - `.claude/`: Claude Code guardrails (deny rules and a hook that block remote and deploy commands).
 - `public/`: the PWA front end: `index.html`, `app.js` (all screens + offline sale queue), `sync.js` (upload and
   offline rules shared with the service worker: only 400/422 mark a sale failed; the shell caches only 2xx and
   falls back to the cache on 500/502/503/504), `style.css`, `sw.js` (app-shell cache), `manifest.webmanifest`,
   `vendor/qrcode.js`. Bump `CACHE` in `sw.js` whenever a shell file changes.
-- `README.md`: what Venstock is, the vendor guide, and local development.
+- `README.md`: what Venstock is, the vendor guide, how it works, local development and tests.

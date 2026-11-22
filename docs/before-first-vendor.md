@@ -1,53 +1,75 @@
-# Before the first paying vendor
+# Launch checklist: before the first paying vendor
 
-Venstock must not onboard a paying vendor until everything on this list exists and has been tested.
-None of it is built yet. This is a checklist, not a design.
+Work through this in order. Every box must be ticked, and its result noted where asked, before a paying vendor is
+onboarded. **You do every step that touches Cloudflare.** Claude never runs remote commands, deploys or tags; the
+repo's guardrails block it from doing so.
 
-## 1. Owner-facing "export everything"
-A vendor's owner can download all of their own data in one go, as CSV: items, shows, upcoming shows, every sale
-with its line items (including voided sales), settings and the list of users (emails and roles, never password
-hashes or authenticator secrets).
-- Scoped to the logged-in vendor only, through the shared query helper, with a cross-tenant test.
-- Owners (admins) only.
-- Needed so a vendor can leave, keep their records, or check what we hold about them.
+Commands marked "remote" talk to your Cloudflare account. The scripts in `scripts/` only ever touch D1 databases
+named `venstock-dev-control` and `venstock-dev-t<id>` (enforced in `scripts/lib/d1-target.mjs`).
 
-## 2. Delete-tenant script
-A script (local by default, `venstock-dev` only when explicitly remote, like the others in `scripts/`) that
-removes one vendor and everything that belongs to them: rows in every vendor table, their sessions, support
-sessions and audit entries as agreed.
-- Refuses to run without the tenant's slug typed twice, and prints row counts per table before deleting.
-- Takes a backup of that tenant first (see 3).
-- Test: delete tenant A in a database holding A and B; every A row is gone and B's row counts are unchanged.
+## 1. Decisions
+- [ ] **The vendor domain (`BASE_DOMAIN`).** A registrable domain used for nothing but vendor shops
+  (`<slug>.<domain>`) and the staff site (`admin.<domain>`). Every subdomain of it is "same-site" with every
+  other, so nothing else may ever live on it (see 11). Marketing, docs, status and support pages go on a different
+  registrable domain (e.g. `site.example` for the website, `shops.example` for vendors).
+- [ ] **Database names.** The scripts allow only `venstock-dev-control` and `venstock-dev-t<id>`. Either launch on
+  those names, or change the rule in `scripts/lib/d1-target.mjs` (`ALLOWED_REMOTE`), its tests and CLAUDE.md
+  first, as a deliberate change. Write down which: ____________
+- [ ] **Retention for deleted vendors** (see 9): how long to keep a deleted vendor's export: ______ days.
 
-## 3. Per-tenant backup and restore
-- **Backup:** export one vendor's rows from every vendor table into a single file.
-- **Restore:** put one vendor back from that file without touching any other vendor's rows, including when ids
-  have moved on since the backup.
-- D1's database-wide time travel is not enough on its own: rolling back the whole database to fix one vendor would
-  undo every other vendor's sales.
-- Test: back up A, change A and B, restore A; A matches the backup and B keeps its changes.
+## 2. Cloudflare account and domain
+- [ ] **Workers Paid plan** on the account. Free allows 10 D1 databases in total (one per vendor plus control) and
+  50 queries per request; Paid includes 100,000 databases. About 5,000 database bindings fit in one Worker.
+- [ ] **The domain is a zone in this Cloudflare account** (nameservers pointed at Cloudflare, zone active).
+- [ ] **Wildcard DNS:** a proxied (orange cloud) record for `*`, e.g. `AAAA * 100::`. It needs no origin: the
+  Worker answers everything. Add no other records under the domain (see 11).
+- [ ] **No apex or other subdomain records** pointing at anything else. The apex can stay unused.
 
-## 4. Per-IP login rate limiting
-Today the only limits are per account: 5 wrong passwords lock that account for 15 minutes, and 5 wrong 6-digit
-codes end that login attempt. Nothing slows down one address trying many accounts, or many vendors.
-- Limit login, sign-up and code attempts per IP address (and per IP per vendor), across all vendors.
-- Answer with 429 and a clear "try again in N minutes" message.
-- Make sure a whole market sharing one Wi-Fi address isn't locked out by one person's typos.
+## 3. The repo's production settings (you edit, then commit)
+- [ ] In `wrangler.toml` `[vars]`: `BASE_DOMAIN = "<your domain>"`. (Local development is unaffected: local configs
+  always use `localhost`.)
+- [ ] In `wrangler.toml`, the wildcard route:
+  ```toml
+  [[routes]]
+  pattern = "*.<your domain>/*"
+  zone_name = "<your domain>"
+  ```
+  Every remote script refuses to run until both are set. The generated deploy config also sets
+  `workers_dev = false` and `preview_urls = false`, so only this route serves the Worker.
 
-## 5. Error monitoring
-The lockdown step makes server errors return a generic message and log details server-side. Someone has to see
-those logs.
-- Errors (with method, path and tenant id; never request bodies, passwords or customer notes) reach a place that
-  alerts a person.
-- Alerts for repeated 5xx responses and for unusual numbers of rejected sales.
-- A way to tie a vendor's "it didn't work" report to the logged error.
+## 4. The control database and the first staff account (remote)
+- [ ] Create it: `npx wrangler d1 create venstock-dev-control`, and put the printed `database_id` into the
+  `CONTROL` block of `wrangler.toml` (commit it; the id isn't a secret).
+- [ ] Migrate it: `node scripts/migrate.mjs --control --remote`. Expected: every file under `migrations/control/`
+  listed as applied.
+- [ ] First staff account: `node scripts/create-platform-admin.mjs you@yourcompany.example --remote`. Keep the
+  printed `https://admin.<domain>/#invite=…` link; it works after the first deploy (step 10) and expires in 7 days.
 
-## 6. Drill: a remote migration that fails halfway keeps nothing
-Locally, a failing migration file is rolled back completely (tested in `tests/migrate.test.mjs`). Cloudflare
-documents the same for `wrangler d1 migrations apply` remotely ("this migration will be rolled back"), and
-`scripts/migrate.mjs` relies on it. Prove it once on a throwaway remote database before the first vendor.
-**You run this; Claude never runs remote commands.** It uses its own folder outside the repo, so it can't touch any
-real vendor or the registry.
+## 5. Protection in front of the Worker
+- [ ] **Rate limiting rule** (Security → WAF → Rate limiting rules) on hostname `*.<domain>`: per client IP, a
+  generous limit for normal use (e.g. 300 requests per minute), blocking for a few minutes when exceeded. A
+  subdomain the Worker hasn't seen in the last 45 seconds costs one query on the shared control database, so a
+  flood of made-up subdomains could slow every vendor. Add a tighter rule for `/api/auth/*` (e.g. 30 per minute
+  per IP): today the only login limits are per account. Test on the dev zone: a register syncing after a long
+  offline spell must stay well under the limits. Rules and numbers: ____________
+- [ ] **Cloudflare Access in front of `admin.<domain>`** (Zero Trust → Access → Applications → Self-hosted, domain
+  `admin.<domain>`): allow only staff emails, require your identity provider or one-time PIN. This is a second,
+  independent login in front of the staff site's own password + 6-digit code.
+
+## 6. Still to build before the first paying vendor
+These don't exist yet. Each needs code, tests and review (ask Claude to build them; they're local work):
+- [ ] **Owner "export everything":** one download with items, shows, upcoming shows, every sale with its lines
+  (voided included), settings and the user list (emails and roles only). Today a vendor can download items and
+  sales as CSV, but not settings or the user list.
+- [ ] **Error visibility:** turn on Workers Logs (an `[observability]` block in the generated deploy config, which
+  `scripts/lib/wrangler-config.mjs` doesn't write yet) and set up an alert on repeated 5xx responses. Server errors
+  are logged with method, path and vendor id, never request bodies.
+- [ ] **A delete-vendor script**, or accept the manual procedure in `docs/runbook.md` ("Deleting a vendor").
+
+## 7. Drill: a remote migration that fails halfway keeps nothing
+Locally, a failing migration file is rolled back completely (`tests/migrate.test.mjs`). Cloudflare documents the
+same for `wrangler d1 migrations apply` remotely, and `scripts/migrate.mjs` relies on it. Prove it once on a
+throwaway database. It uses its own folder outside the repo, so it can't touch the registry or any vendor.
 
 ```bash
 # 0. A scratch folder, outside the repo
@@ -80,49 +102,89 @@ npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT name FROM sq
 
 # 6. Check: only 0001_ok.sql is recorded as applied
 npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT name FROM d1_migrations ORDER BY id"
+```
+- [ ] **Pass:** step 5 lists `d1_migrations` and `drill_ok` but not `drill_partial`, and step 6 lists only
+  `0001_ok.sql`. **Fail:** `drill_partial` exists, or `0002_fails_halfway.sql` is recorded as applied. Then stop:
+  the runner's "one file is all or nothing" assumption doesn't hold remotely, and migrations would have to be
+  written to be safe to re-run.
+- Keep the scratch folder and database for drill 8; delete both at the end of it.
 
-# 7. Clean up: delete the throwaway database (it asks you to confirm) and the scratch folder
+## 8. Drill: restore one vendor with Time Travel, and only that vendor
+Each vendor has its own database, so a restore is per vendor: rolling back one shop never touches another. D1 keeps
+30 days of history on Workers Paid. Prove the procedure once, on throwaway databases.
+
+```bash
+cd /tmp/venstock-drill
+# 1. A second throwaway database ("another vendor"); add it to wrangler.toml as binding DB_T98
+npx wrangler d1 create venstock-dev-t98
+
+# 2. Rows in both, then note the time
+npx wrangler d1 execute venstock-dev-t99 --remote --command "CREATE TABLE sales (n INTEGER); INSERT INTO sales VALUES (1), (2)"
+npx wrangler d1 execute venstock-dev-t98 --remote --command "CREATE TABLE sales (n INTEGER); INSERT INTO sales VALUES (10)"
+date -u +%Y-%m-%dT%H:%M:%SZ          # write it down: T
+sleep 60
+
+# 3. "The accident" in t99, and normal business in t98, after T
+npx wrangler d1 execute venstock-dev-t99 --remote --command "DELETE FROM sales"
+npx wrangler d1 execute venstock-dev-t98 --remote --command "INSERT INTO sales VALUES (11)"
+
+# 4. Restore t99 to T (it asks to confirm and prints a bookmark that undoes the restore)
+npx wrangler d1 time-travel info venstock-dev-t99 --timestamp=<T>
+npx wrangler d1 time-travel restore venstock-dev-t99 --timestamp=<T>
+
+# 5. Check both
+npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT n FROM sales ORDER BY n"   # expect 1, 2
+npx wrangler d1 execute venstock-dev-t98 --remote --command "SELECT n FROM sales ORDER BY n"   # expect 10, 11
+
+# 6. Clean up both throwaway databases (each asks to confirm) and the folder
 npx wrangler d1 delete venstock-dev-t99
+npx wrangler d1 delete venstock-dev-t98
 cd / && rm -rf /tmp/venstock-drill
 ```
+- [ ] **Pass:** t99 is back to 1, 2 and t98 still has 10, 11. Note how long the restore took, and keep the bookmark
+  procedure in mind: a restore is itself undoable with the bookmark it prints.
+- Restoring a real vendor: the same commands on their database (`venstock-dev-t<id>`, from the staff site's vendor
+  list), after telling them. Sales their devices uploaded after T are lost from the server; devices still holding
+  queued sales will upload them again.
 
-- **Pass:** step 5 lists `d1_migrations` and `drill_ok` but not `drill_partial`, and step 6 lists only `0001_ok.sql`.
-- **Fail:** `drill_partial` exists (with or without a row), or `0002_fails_halfway.sql` is recorded as applied.
-  Stop: the runner's "one file is all or nothing" assumption doesn't hold remotely, and migrations would have to be
-  written to be safe to re-run before any vendor is onboarded.
-- Record the result below.
+## 9. Retention rules
+- [ ] Written down and agreed (fill in the decision from 1):
+  - A **suspended** vendor's data is kept as is; they can still open the app and export failed sales.
+  - A vendor that **leaves** gets their export first (`docs/runbook.md`, "Offboarding"), then is marked deleted.
+  - A **deleted** vendor's database is kept for ______ days (at least until the export has been delivered and
+    confirmed), then dropped by hand. Dropping is permanent; Time Travel can't bring back a deleted database.
+  - The control database's audit log is kept forever (it is append-only; nothing can change or remove a row).
+  - Venstock staff accounts that leave are disabled (`create-platform-admin.mjs --disable`), never deleted, so
+    the audit log keeps naming them.
 
-| Date | wrangler version | Result |
+## 10. The first release
+- [ ] `node scripts/migrate.mjs --remote` (control and every vendor database up to date).
+- [ ] `node scripts/release.mjs` (remote). It checks the migration checksums, the registry, that nothing is behind,
+  the vendor count against the last release, and runs the full test suite. It writes
+  `.wrangler-generated/remote/wrangler.toml` and **prints** the deploy and tag commands; it runs neither.
+- [ ] Deploy with the printed command: `npx wrangler deploy -c .wrangler-generated/remote/wrangler.toml`.
+- [ ] Verify:
+  - `https://admin.<domain>/` asks for Cloudflare Access, then shows the staff login; the invite from step 4 works.
+  - `https://made-up-name.<domain>/` answers "Not found".
+  - The response headers include `referrer-policy: no-referrer`; `https://<anything>.workers.dev` doesn't serve it.
+  - Onboard a test vendor end to end with `docs/runbook.md` ("Onboarding"), including a support session, then
+    abandon or delete it.
+- [ ] Tag the release with the printed command (`git tag release-YYYYMMDD-HHMM <commit> && git push origin <tag>`).
+  The migration checksums recorded at that tag can never change afterwards; the tests and `release.mjs` enforce it.
+
+## 11. Rules that hold after launch
+- **Nothing else lives on the vendor domain.** Never point any subdomain, or the apex, at a third-party host (status
+  pages, docs platforms, site builders, email tracking links, URL shorteners) or anything other people can edit.
+  The only DNS records are the wildcard to the Worker and what Cloudflare itself needs. Check the DNS list after any
+  change.
+- **Registry changes take up to 45 seconds.** The Worker caches each subdomain's registry entry for 45 seconds per
+  isolate, unknown ones included. A new vendor can show "Not found" for up to 45 seconds after setup (on top of the
+  deploy it needs), and a suspension can take up to 45 seconds to apply everywhere.
+- **Migrations are backward compatible**, and `migrate` runs before `deploy`.
+
+## Results
+| Step | Date | Result / notes |
 |---|---|---|
-
-## 7. Registry changes take up to 45 seconds to reach every request
-The Worker caches each hostname's registry lookup for 45 seconds in each isolate (`src/lib/control.js`), and it
-caches "no such vendor" too, so a flood of requests for made-up subdomains doesn't reach the control database.
-- A **new vendor** can answer 404 for up to 45 seconds after `create-tenant` finishes (if anyone visited the
-  subdomain just before), on top of the redeploy it needs for its database binding.
-- A **suspension** (or unsuspension) can take up to 45 seconds to apply everywhere. Each isolate caches separately,
-  so for a short while some requests may see the old status and some the new one.
-- Onboarding and support scripts should say so ("live within a minute"), and anything urgent, such as cutting off
-  an abusive account, has to allow for the window.
-
-## 8. A rate-limiting rule on the wildcard route
-Every request to `*.<vendor domain>` runs the Worker, and a subdomain the registry hasn't seen in the last 45
-seconds costs one query on the control database, which every vendor shares. A flood of made-up subdomains could
-slow lookups for all vendors (nothing can leak through it; it's an availability risk).
-- Before launch, add a Cloudflare rate-limiting rule (WAF → Rate limiting rules) on the vendor domain's wildcard
-  hostname: per client IP, a generous limit for normal use (e.g. a few hundred requests a minute), blocking for a
-  few minutes when exceeded.
-- Test it on the dev zone first: a busy register syncing after a long offline spell must stay well under the limit.
-- Note the rule and its numbers here.
-
-## 9. Nothing else lives on the vendor domain
-Every `<slug>.<vendor domain>` is "same-site" with every other one, so a page on ANY subdomain of that domain
-(or the apex) is trusted by browsers more than a page elsewhere. The Worker refuses cross-origin writes and the
-session cookie is `__Host-` (so no sibling can overwrite it), but don't hand out that position at all:
-- Never point any subdomain of the vendor domain, or the apex, at a third-party host (status pages, docs
-  platforms, marketing site builders, email tracking links, URL shorteners) or anything that serves content other
-  people can edit.
-- Keep marketing, docs, status and support pages on a different registrable domain (e.g. `site.example` for the
-  website and docs, `shops.example` for vendors).
-- The only DNS records under the vendor domain are the wildcard route to the Worker and what Cloudflare itself
-  needs. Check the DNS list before launch and after any change.
+| 7. Migration drill | | |
+| 8. Time Travel drill | | |
+| 10. First release | | |
