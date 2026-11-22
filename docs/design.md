@@ -153,8 +153,11 @@ The screen is built from flat color fields; a change of color stands in for a bo
   running show). Mustard marks deals, notices, invites, the support banner and the support-link countdown. Brick
   marks failed sales, always with words.
 - **Login:** a deep-blue field with the stacked wordmark beside the form (above it on phones).
-- **Public site:** the same tokens and fonts. Full-width bands, an asymmetric heading/content grid, and the
-  product's own order panel drawn in HTML. No images, no third-party anything.
+- **Public site:** the same tokens and fonts, one page per header link: Home (`/`: the opening with the
+  product's own order panel drawn in HTML, then a ruled index of the other pages), What it is (`/what`, sky band),
+  How it works (`/how`, deep-blue band), Pricing (`/pricing`, the whole page is the mustard field) and Join
+  (`/join`, ink band, the one orange button). The header marks the current page with an ink block, like the app's
+  tabs; each page ends with a full-width "Next" link. No images, no scripts, no third-party anything.
 
 **B, "Ledger"** (cream, ink, ruled rows, a category rail) was the alternative. It was calmer, but its rows are
 smaller targets than A's tiles for fast tapping at a busy table.

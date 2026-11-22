@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#8CB9CE">
-  <!-- TODO: your wording for the description search engines show. -->
   <meta name="description" content="Venstock: a point of sale and stock tracker for vendor shows. Cash, Venmo and Zelle; keeps working without signal.">
   <title>Venstock</title>
   <link rel="preload" href="/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
@@ -17,11 +16,11 @@
   <header class="top">
     <div class="wrap">
       <a class="mark" href="/">Venstock</a>
-      <nav class="label" aria-label="Sections">
-        <a href="#what">What it is</a>
-        <a href="#how">How it works</a>
-        <a href="#pricing">Pricing</a>
-        <a href="#join">Join</a>
+      <nav class="label" aria-label="Pages">
+        <a href="/what">What it is</a>
+        <a href="/how">How it works</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/join">Join</a>
       </nav>
     </div>
   </header>
@@ -48,59 +47,19 @@
       </div>
     </section>
 
-    <section class="section" id="what" aria-labelledby="what-h">
+    <section class="index" aria-labelledby="index-h">
       <div class="wrap">
-        <h2 id="what-h">What it is</h2>
-        <ul class="facts">
-          <li><b>Keeps selling offline</b><span>Sales are saved on the phone and upload by themselves when the signal comes back.</span></li>
-          <li><b>Cash, Venmo and Zelle</b><span>Records how each sale was paid and works out the change. The money itself goes the way it always does.</span></li>
-          <li><b>Stock that counts down</b><span>Every sale takes its items off your stock. Restock from the till, or import your spreadsheet.</span></li>
-          <li><b>Deals and discounts</b><span>Bundle deals apply by themselves; add a percent or dollar discount at checkout.</span></li>
-          <li><b>Several registers at once</b><span>Two or more phones can sell at the same show; stock stays shared.</span></li>
-          <li><b>Totals for every show</b><span>By payment, by register and best sellers, with a spreadsheet download.</span></li>
-          <li><b>Your own address</b><span><span class="num">yourshop.venstock.org</span>, with invite-only logins and a 6-digit code from an authenticator app.</span></li>
-          <li><b>We only look when you need help</b><span>Venstock staff can open your shop read-only, for at most 30 minutes, with a reason, and you see every visit.</span></li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="section" id="how" aria-labelledby="how-h">
-      <div class="wrap">
-        <h2 id="how-h">How it works</h2>
-        <!-- TODO: check these steps match how you onboard vendors. -->
-        <ol class="steps">
-          <li><span>Pay the setup fee and tell us your shop's name.</span></li>
-          <li><span>We set up your shop at <span class="num">yourshop.venstock.org</span> and send you an invite link.</span></li>
-          <li><span>Set your password and authenticator code, then add your items or import a spreadsheet.</span></li>
-          <li><span>Open it on your phone at the show and start selling.</span></li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="section price" id="pricing" aria-labelledby="pricing-h">
-      <div class="wrap">
-        <h2 id="pricing-h">Pricing</h2>
-        <div>
-          <div class="price-figures">
-            <div><span class="num">$50</span><span class="label">Setup, once</span></div>
-            <!-- TODO: the monthly price. -->
-            <div><span class="num">$<span class="todo">TODO</span></span><span class="label">Every month</span></div>
-          </div>
-          <!-- TODO: what the monthly price includes, how billing and cancelling work. -->
-          <p><span class="todo">TODO</span> What the monthly price includes, and how billing and cancelling work.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="section join" id="join" aria-labelledby="join-h">
-      <div class="wrap">
-        <h2 id="join-h">Join</h2>
-        <div class="join-actions">
-          <!-- TODO: replace href="#join" with your Stripe payment link (https://buy.stripe.com/...). -->
-          <a class="button" href="#join">Pay the $50 setup fee</a>
-          <!-- TODO: replace TODO-contact@venstock.org with your real address. -->
-          <p>Questions first? Email <a href="mailto:TODO-contact@venstock.org">TODO-contact@venstock.org</a>.</p>
-        </div>
+        <h2 id="index-h">Find out more</h2>
+        <nav class="doors" aria-label="More about Venstock">
+          <a class="door" href="/what"><span class="label">01</span><b>What it is</b><span class="go" aria-hidden="true">→</span>
+            <span class="say">Everything it does at the table, after the show, and for your shop.</span></a>
+          <a class="door" href="/how"><span class="label">02</span><b>How it works</b><span class="go" aria-hidden="true">→</span>
+            <span class="say">From signing up to your first sale, in four steps.</span></a>
+          <a class="door" href="/pricing"><span class="label">03</span><b>Pricing</b><span class="go" aria-hidden="true">→</span>
+            <span class="say">A one-time setup fee, then monthly.</span></a>
+          <a class="door" href="/join"><span class="label">04</span><b>Join</b><span class="go" aria-hidden="true">→</span>
+            <span class="say">Pay the setup fee, or ask us something first.</span></a>
+        </nav>
       </div>
     </section>
   </main>
@@ -108,7 +67,7 @@
   <footer class="foot">
     <div class="wrap">
       <p>Venstock is provided by Medein LLC.</p>
-      <nav aria-label="Legal"><a href="/terms.html">Terms</a><a href="/privacy.html">Privacy</a></nav>
+      <nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a></nav>
     </div>
   </footer>
 </body>

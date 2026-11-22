@@ -83,11 +83,19 @@ test("nothing loads from another origin; external links only to the Stripe payme
   }
 });
 
+// Cloudflare's static assets serve /what from what.html (and redirect /what.html to /what), so pages link to /what.
+const fileFor = (url) => {
+  const path = url.replace(/[#?].*$/, "");
+  if (path === "/") return join(PUB, "index.html");
+  if (extname(path)) return join(PUB, path);
+  return join(PUB, `${path}.html`);
+};
+const PAGES = [["/what", "What it is"], ["/how", "How it works"], ["/pricing", "Pricing"], ["/join", "Join"]];
+
 test("every same-site link and resource points at a file that exists", () => {
   for (const p of pages) {
     for (const m of read(p).matchAll(/\s(?:href|src)\s*=\s*"(\/[^"#?]*)/g)) {
-      const path = m[1] === "/" ? "/index.html" : m[1];
-      assert.ok(existsSync(join(PUB, path)), `${rel(p)} -> ${m[1]} does not exist in site/public`);
+      assert.ok(existsSync(fileFor(m[1])), `${rel(p)} -> ${m[1]} does not exist in site/public`);
     }
     for (const id of [...read(p).matchAll(/href="#([^"]+)"/g)].map((m) => m[1])) {
       assert.match(read(p), new RegExp(`id="${id}"`), `${rel(p)} links to #${id}, which isn't on the page`);
@@ -95,15 +103,23 @@ test("every same-site link and resource points at a file that exists", () => {
   }
 });
 
-test("the home page has every section, the provider, terms and privacy, and the setup fee", () => {
-  const html = read(join(PUB, "index.html"));
-  for (const id of ["what", "how", "pricing", "join"]) assert.match(html, new RegExp(`<section[^>]+id="${id}"`), `section #${id}`);
-  assert.match(html, /\$50/);
-  assert.match(html, /mailto:/);
+test("one page per header link: every page has the same header, marks its own page, and names the provider", () => {
+  for (const [href] of PAGES) assert.ok(existsSync(fileFor(href)), `${href} has a page`);
   for (const p of pages) {
-    assert.match(read(p), /provided by Medein LLC/, `${rel(p)} footer names the provider`);
+    const html = read(p);
+    const nav = /<nav class="label" aria-label="Pages">([\s\S]*?)<\/nav>/.exec(html);
+    assert.ok(nav, `${rel(p)} has the header navigation`);
+    assert.deepEqual([...nav[1].matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map((m) => [m[1], m[2]]), PAGES, `${rel(p)} header links`);
+    const own = PAGES.find(([href]) => fileFor(href) === p);
+    const current = [...nav[1].matchAll(/<a href="([^"]+)" aria-current="page">/g)].map((m) => m[1]);
+    assert.deepEqual(current, own ? [own[0]] : [], `${rel(p)} marks only its own page as current`);
+    assert.match(html, /provided by Medein LLC/, `${rel(p)} footer names the provider`);
+    assert.match(html, /<a href="\/terms">Terms<\/a><a href="\/privacy">Privacy<\/a>/, `${rel(p)} links terms and privacy`);
+    assert.equal((html.match(/<h1\b/g) || []).length, 1, `${rel(p)} has exactly one h1`);
   }
-  for (const p of ["terms.html", "privacy.html"]) assert.ok(existsSync(join(PUB, p)), p);
+  assert.match(read(fileFor("/pricing")), /\$50/, "pricing shows the setup fee");
+  assert.match(read(fileFor("/join")), /mailto:/, "join has the contact email");
+  assert.match(read(fileFor("/join")), /class="button"/, "join has the payment button");
 });
 
 test("no invented proof: no testimonials, statistics, ratings, customer names or logos", () => {

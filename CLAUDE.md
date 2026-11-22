@@ -200,7 +200,8 @@ user deploys it from `site/`; Claude never does, and never adds a deploy script 
   Fraunces, OFL), `sw.js` (app-shell cache), `manifest.webmanifest`, `vendor/qrcode.js`. Bump `CACHE` in `sw.js`
   whenever a shell file changes, and add any new shell file to its `SHELL` list (a test checks).
 - `site/`: Venstock's public site at the apex, a separate static-assets-only Worker (`site/wrangler.toml`,
-  `site/public/`: pages, `site.css`, `_headers` with the CSP, copies of `tokens.css` and the fonts).
+  `site/public/`: one page per header link (`index`, `what`, `how`, `pricing`, `join`, served at `/what` etc.), `terms`,
+  `privacy`, `404`, `site.css`, `_headers` with the CSP, copies of `tokens.css` and the fonts).
 - `docs/design.md`: the design system (palette, contrast, type, rules). `design/preview/`: the two direction
   previews (A was chosen). `design/reference/` is gitignored third-party artwork: never commit it.
 - `scripts/seed-demo.mjs`: local-only demo data for vendor "demo" (refuses any remote target before opening anything).
