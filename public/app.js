@@ -109,6 +109,7 @@ async function sync() {
 }
 
 async function refresh() {
+  const support = inSupport(); // decided once: the session may end while this runs
   const [items, settings, show, shows, upcoming] = await Promise.all([
     api("items?all=1"), api("settings"), api("shows/active"), api("shows"),
     api("shows/upcoming").catch(() => state.upcoming), // keep working if the database isn't updated yet
@@ -126,11 +127,29 @@ async function refresh() {
     const it = state.items.find((i) => i.id === l.item_id);
     if (it) it.stock -= l.qty;
   }
-  for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, state[k]);
+  // A support session never keeps the shop's data on the device (it's a Venstock staff browser).
+  if (!support && state.me) for (const k of SHOP_KEYS) store.set(k, state[k]);
+}
+
+// The shop's data as saved on this device (sales not uploaded yet, "pending" and "failed", are not in this list).
+const SHOP_KEYS = ["items", "settings", "show", "sales", "summary", "shows", "upcoming"];
+function forgetShop() {
+  for (const k of SHOP_KEYS) store.set(k, null);
+  Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null, lastInvite: null });
 }
 
 // A Venstock support session (read-only, opened from the platform admin's one-time link): /api/auth/me says so.
+// It ends by the banner's button, by running out (the API answers 401) or by a platform admin; every way out goes
+// through endedSupport(), so none of the shop's data is left in the staff member's browser.
 const inSupport = () => !!(state.me && state.me.support);
+function endedSupport(info = "The support session has ended.") {
+  forgetShop(); resetTxn();
+  state.me = null; store.set("me", null);
+  state.auth = authState("login", info);
+  state.tab = "sell";
+  if (state.modal) closeModal(false);
+  render(); paintSupportBanner();
+}
 function paintSupportBanner() {
   let b = document.getElementById("supportBanner");
   if (!inSupport()) { if (b) b.remove(); return; }
@@ -969,20 +988,21 @@ function renderAuth() {
 
 // Called with the server's answer after each login step.
 function signedIn(me) {
-  store.set("lastEmail", me.email);
+  if (!me.support) store.set("lastEmail", me.email);
   if (me.stage !== "ok") {
     state.me = null; store.set("me", null);
     state.auth = authState(me.stage, "", { email: me.email });
     render();
     return;
   }
-  state.me = me; store.set("me", me);
+  state.me = me; store.set("me", me.support ? null : me); // a support session needs a connection: never remembered
   state.auth = null; state.users = null; state.lastInvite = null;
   render(); paintHeader(); sync();
 }
 
 function loggedOut(info = "") {
   if (!state.me) return;
+  if (inSupport()) return endedSupport();
   state.me = null; store.set("me", null);
   state.auth = authState("login", info);
   if (state.modal) closeModal(false);
@@ -995,8 +1015,7 @@ async function logOut() {
   try { await api("auth/logout", { method: "POST", body: {} }); }
   catch (e) { if (!e.status) { alert("You're offline. Connect to the internet to log out."); return; } }
   // forget the shop's data on this device (sales not uploaded yet are kept)
-  for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, null);
-  Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null, lastInvite: null });
+  forgetShop();
   resetTxn();
   state.me = null; store.set("me", null);
   state.auth = authState("login", "You're logged out.");
@@ -1283,13 +1302,7 @@ document.addEventListener("click", (e) => {
   }
 
   if (d.endsupport !== undefined) {
-    api("support/end", { method: "POST", body: {} }).catch(() => {}).finally(() => {
-      state.me = null; store.set("me", null);
-      for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, null);
-      Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null });
-      state.auth = authState("login", "The support session has ended.");
-      render(); paintSupportBanner();
-    });
+    api("support/end", { method: "POST", body: {} }).catch(() => {}).finally(() => endedSupport());
     return;
   }
 
