@@ -115,9 +115,26 @@ Only after offboarding (above), and after the export has been delivered and conf
 
 ## Restoring a vendor's data
 Each vendor's database can be rolled back on its own (Time Travel keeps 30 days), without touching any other vendor.
-Follow the procedure proven in the launch checklist (drill 8) on `venstock-dev-t<id>`, after agreeing the point in
-time with the vendor. Sales uploaded after that time are lost from the server; devices still holding queued sales
-upload them again.
+The procedure was proven in the launch checklist (drill 8). The database is `venstock-dev-t<id>` (from the staff
+site's vendor list).
+
+**Before any risky manual change** to a vendor database, save the current bookmark:
+```bash
+npx wrangler d1 time-travel info venstock-dev-t<id>     # no timestamp: prints the current bookmark; note it
+```
+Restoring to that bookmark is exact: `npx wrangler d1 time-travel restore venstock-dev-t<id> --bookmark=<bookmark>`.
+
+**Restoring to a point in time** (after agreeing it with the vendor):
+1. Pick a **whole minute** `T` (`YYYY-MM-DDTHH:MM:00Z`, UTC) at least a minute or two **before** the incident but
+   **after** the last data you want to keep. Restore targets resolve to whole minutes, and a timestamp only seconds
+   after the writes can resolve to an older bookmark. Everything written between `T` and the restore is lost.
+2. Check what `T` resolves to, and only go on when it looks right:
+   `npx wrangler d1 time-travel info venstock-dev-t<id> --timestamp=<T>`
+3. Restore (it asks to confirm): `npx wrangler d1 time-travel restore venstock-dev-t<id> --timestamp=<T>`
+4. The restore prints an **"undo" bookmark**. Keep it until the vendor confirms the data is right; restoring to it
+   reverses the restore.
+5. Tell the vendor what was lost (everything the server received after `T`) and what will come back on its own:
+   devices that still hold queued sales upload them again.
 
 ## Venstock staff accounts
 - New staff: `node scripts/create-platform-admin.mjs person@yourcompany.example --remote` (and add them to the

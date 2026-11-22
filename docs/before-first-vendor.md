@@ -102,7 +102,7 @@ npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT name FROM sq
 # 6. Check: only 0001_ok.sql is recorded as applied
 npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT name FROM d1_migrations ORDER BY id"
 ```
-- [ ] **Pass:** step 5 lists `d1_migrations` and `drill_ok` but not `drill_partial`, and step 6 lists only
+- [x] **Pass:** step 5 lists `d1_migrations` and `drill_ok` but not `drill_partial`, and step 6 lists only
   `0001_ok.sql`. **Fail:** `drill_partial` exists, or `0002_fails_halfway.sql` is recorded as applied. Then stop:
   the runner's "one file is all or nothing" assumption doesn't hold remotely, and migrations would have to be
   written to be safe to re-run.
@@ -117,19 +117,20 @@ cd /tmp/venstock-drill
 # 1. A second throwaway database ("another vendor"); add it to wrangler.toml as binding DB_T98
 npx wrangler d1 create venstock-dev-t98
 
-# 2. Rows in both, then note the time
+# 2. Rows in both; wait, then take T as a WHOLE minute (restore targets resolve to whole minutes)
 npx wrangler d1 execute venstock-dev-t99 --remote --command "CREATE TABLE sales (n INTEGER); INSERT INTO sales VALUES (1), (2)"
 npx wrangler d1 execute venstock-dev-t98 --remote --command "CREATE TABLE sales (n INTEGER); INSERT INTO sales VALUES (10)"
-date -u +%Y-%m-%dT%H:%M:%SZ          # write it down: T
-sleep 60
+sleep 150
+T=$(date -u +%Y-%m-%dT%H:%M:00Z); echo "T=$T"   # write it down
 
-# 3. "The accident" in t99, and normal business in t98, after T
+# 3. "The accident" in t99, and normal business in t98, after T; then wait
 npx wrangler d1 execute venstock-dev-t99 --remote --command "DELETE FROM sales"
 npx wrangler d1 execute venstock-dev-t98 --remote --command "INSERT INTO sales VALUES (11)"
+sleep 120
 
-# 4. Restore t99 to T (it asks to confirm and prints a bookmark that undoes the restore)
-npx wrangler d1 time-travel info venstock-dev-t99 --timestamp=<T>
-npx wrangler d1 time-travel restore venstock-dev-t99 --timestamp=<T>
+# 4. Check what T resolves to, then restore t99 to it (it asks to confirm and prints an "undo" bookmark: keep it)
+npx wrangler d1 time-travel info venstock-dev-t99 --timestamp=$T
+npx wrangler d1 time-travel restore venstock-dev-t99 --timestamp=$T
 
 # 5. Check both
 npx wrangler d1 execute venstock-dev-t99 --remote --command "SELECT n FROM sales ORDER BY n"   # expect 1, 2
@@ -140,11 +141,16 @@ npx wrangler d1 delete venstock-dev-t99
 npx wrangler d1 delete venstock-dev-t98
 cd / && rm -rf /tmp/venstock-drill
 ```
-- [ ] **Pass:** t99 is back to 1, 2 and t98 still has 10, 11. Note how long the restore took, and keep the bookmark
+- [x] **Pass:** t99 is back to 1, 2 and t98 still has 10, 11. Note how long the restore took, and keep the bookmark
   procedure in mind: a restore is itself undoable with the bookmark it prints.
-- Restoring a real vendor: the same commands on their database (`venstock-dev-t<id>`, from the staff site's vendor
-  list), after telling them. Sales their devices uploaded after T are lost from the server; devices still holding
-  queued sales will upload them again.
+- What the real drill showed:
+  - **Restore targets are whole minutes.** A timestamp taken seconds after the writes can resolve to an older
+    bookmark. Hence the `sleep 150` before T, the whole-minute T, and `time-travel info` before every restore.
+  - **A saved bookmark is exact.** `npx wrangler d1 time-travel info <db>` with no timestamp prints the current
+    bookmark; `restore --bookmark=<that>` returns to exactly that state.
+  - **Every restore prints an "undo" bookmark.** Restoring to it reverses the restore; keep it until the data is
+    confirmed right.
+- Restoring a real vendor: `docs/runbook.md`, "Restoring a vendor's data".
 
 ## 9. Retention rules
 - [ ] Written down and agreed (fill in the decision from 1):
@@ -184,6 +190,6 @@ cd / && rm -rf /tmp/venstock-drill
 ## Results
 | Step | Date | Result / notes |
 |---|---|---|
-| 7. Migration drill | | |
-| 8. Time Travel drill | | |
+| 7. Migration drill | 2026-11-22 | Passed |
+| 8. Time Travel drill | 2026-11-22 | Passed (restore targets are whole minutes; see the notes under 8) |
 | 10. First release | | |
