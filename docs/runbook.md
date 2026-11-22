@@ -64,22 +64,26 @@ who, why, how long) in their Account screen. Ask the vendor before opening one.
 
 ## Suspending a vendor (and lifting it)
 A suspended vendor's site still opens (so they can see the message and export failed sales), but every API request
-answers "This account is suspended. Contact Venstock support." There is no script for this yet; it is one update on
-the control database (remote):
+answers "This account is suspended. Contact Venstock support." (remote):
 ```bash
-npx wrangler d1 execute venstock-dev-control --remote --command \
-  "UPDATE tenants SET status = 'suspended', status_changed_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE slug = 'acme' AND status = 'active'"
-npx wrangler d1 execute venstock-dev-control --remote --command \
-  "INSERT INTO audit_log (at, tenant_id, action, detail) SELECT strftime('%Y-%m-%dT%H:%M:%SZ','now'), id, 'vendor.suspend', 'reason: <why>' FROM tenants WHERE slug = 'acme'"
+node scripts/suspend-tenant.mjs acme --reason "Unpaid invoice" --remote
+node scripts/suspend-tenant.mjs acme --resume --remote          # lift it
 ```
-To lift it, the same with `status = 'active' ... AND status = 'suspended'` and action `vendor.unsuspend`. Both take
-effect within 45 seconds; no deploy is needed. Support sessions can't be opened on a suspended vendor.
+- Only the control database changes; the vendor's data is untouched. Each change is recorded in the audit log
+  (`vendor.suspended` / `vendor.unsuspended`, with the reason if given).
+- Suspending also ends any open support session on the vendor, and new ones can't be opened while suspended.
+- Both take effect within 45 seconds; no deploy is needed.
+- It refuses an unknown slug, a vendor that is already in the asked-for state, one still provisioning (use
+  `create-tenant.mjs --resume` or `--abandon`), and a deleted one.
 
 ## Offboarding and data export
-1. **The vendor's own downloads** (they can do these themselves, as admins): Items → Download current items (CSV);
-   Shows → Download CSV per show; the full sales CSV (all shows); and any failed sales still on a device (Sales tab →
+1. **The vendor's own downloads, while they are still active** (a suspended vendor's API is closed, so these stop
+   working once suspended; they do them themselves, as admins): Items → Download current items (CSV); Shows →
+   Download CSV per show; the full sales CSV (all shows); and any failed sales still on a device (Sales tab →
    Download as CSV).
-2. **A complete copy** (until the owner "export everything" download exists, see the launch checklist): export
+2. **Suspend them**, so nothing changes from here on (remote):
+   `node scripts/suspend-tenant.mjs acme --reason "Leaving" --remote`.
+3. **A complete copy** (until the owner "export everything" download exists, see the launch checklist): export
    their database (remote):
    ```bash
    npx wrangler d1 export venstock-dev-t<id> --remote --output=acme-YYYY-MM-DD.sql
@@ -87,18 +91,19 @@ effect within 45 seconds; no deploy is needed. Support sessions can't be opened 
    This file holds everything, including password hashes, authenticator secrets and sessions: treat it as secret.
    Before handing it to the vendor, remove the `users` and `sessions` rows (or send only the CSVs from step 1 plus
    the user list as emails and roles).
-3. Keep the export for the retention period agreed in the launch checklist, then delete it.
+4. Keep the export for the retention period agreed in the launch checklist, then delete it.
 
 ## Deleting a vendor
 Only after offboarding (above), and after the export has been delivered and confirmed.
-1. **Mark them deleted** in the registry (remote). Their address answers "Not found" within 45 seconds, and the slug
-   can never be used again:
+1. **Mark them deleted** in the registry (remote). The vendor must already be suspended, and `--confirm` must repeat
+   the exact slug:
    ```bash
-   npx wrangler d1 execute venstock-dev-control --remote --command \
-     "UPDATE tenants SET status = 'deleted', status_changed_at = strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE slug = 'acme'"
-   npx wrangler d1 execute venstock-dev-control --remote --command \
-     "INSERT INTO audit_log (at, tenant_id, action, detail) SELECT strftime('%Y-%m-%dT%H:%M:%SZ','now'), id, 'vendor.delete', 'reason: <why>' FROM tenants WHERE slug = 'acme'"
+   node scripts/delete-tenant.mjs acme --confirm acme --reason "Closed the shop" --remote
    ```
+   This is a soft delete: status `deleted`, any open support session ended, a `vendor.deleted` audit entry, and the
+   binding left out of the generated config. Their address answers "Not found" within 45 seconds. It never drops
+   the database and never removes the registry row, so the slug can never be used again (`create-tenant` refuses
+   it). It prints the remaining steps below, with the exact database name.
 2. **Disconnect the database** with the next release. `release.mjs` refuses a release with fewer vendors than the
    last one unless you name exactly who is gone:
    ```bash

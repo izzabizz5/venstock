@@ -138,7 +138,7 @@ support sessions, suspending, exporting and deleting.
 - `src/platform.js`: the staff API at `admin.<domain>`.
 - `public/`: the shop app (`index.html`, `app.js`, `sync.js`, `sw.js`, `style.css`) and the staff page (`admin.html`,
   `admin.js`).
-- `scripts/`: create shops and staff, run migrations, build the deploy config, prepare a release.
+- `scripts/`: create, suspend and delete shops, add staff, run migrations, build the deploy config, prepare a release.
 - `migrations/`: `control/` and `vendor/` migrations with checksums (`001`–`004`: history of the original app).
 - `tests/`: automated tests (`node --test`) and `tests/MANUAL.md`.
 - `docs/`: the launch checklist and the runbook.

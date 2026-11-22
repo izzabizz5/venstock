@@ -69,6 +69,13 @@ function runFlow(mode) {
   script("create-tenant.mjs", "--abandon", "stuck");
   script("migrate.mjs");
   script("build-config.mjs");
+  script("suspend-tenant.mjs", "acme");
+  script("suspend-tenant.mjs", "acme");                                       // refused: already suspended
+  script("suspend-tenant.mjs", "acme", "--resume");
+  script("suspend-tenant.mjs", "acme", "--reason", "Unpaid invoice");
+  script("delete-tenant.mjs", "demo", "--confirm", "demo");                   // refused: not suspended
+  script("delete-tenant.mjs", "acme", "--confirm", "acme", "--reason", "Left");
+  script("suspend-tenant.mjs", "acme", "--resume");                           // refused: deleted
 
   const ops = readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   return { ops, exits };
@@ -96,7 +103,7 @@ test("both runs complete the same flows with the same results, and nothing calls
   local = runFlow("local");
   remote = runFlow("remote");
   assert.deepEqual(remote.exits.map(({ name, args, code }) => ({ name, args, code })), local.exits.map(({ name, args, code }) => ({ name, args, code })));
-  assert.deepEqual(local.exits.map((e) => e.code), [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], JSON.stringify(local.exits, null, 1));
+  assert.deepEqual(local.exits.map((e) => e.code), [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1], JSON.stringify(local.exits, null, 1));
   assert.equal(readFileSync(npxLog, "utf8"), "", "no wrangler process was started in either run");
 });
 
@@ -136,7 +143,8 @@ test("--remote refuses a vendor database whose name breaks the rule, before any 
     VALUES (1, 'legacy', 'Legacy', 'active', 'DB_T1', 'show-pos-db', 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'o@l.test', 'x', 'x');
     UPDATE tenants SET schema_version = '${LATEST_VENDOR}' WHERE id = 1;`); // up to date, so only the name can be the reason
   writeFileSync(log, "");
-  for (const [name, args] of [["add-admin.mjs", ["--tenant", "legacy", "x@l.test"]], ["build-config.mjs", []], ["migrate.mjs", ["--vendors"]], ["create-tenant.mjs", ["newshop", "New", "n@n.test"]]]) {
+  for (const [name, args] of [["add-admin.mjs", ["--tenant", "legacy", "x@l.test"]], ["build-config.mjs", []], ["migrate.mjs", ["--vendors"]], ["create-tenant.mjs", ["newshop", "New", "n@n.test"]],
+    ["delete-tenant.mjs", ["legacy", "--confirm", "legacy"]]]) {
     const r = run(name, ...args);
     assert.notEqual(r.status, 0, name);
     assert.match(r.stderr, /Refusing --remote: vendor 1's database is show-pos-db/, name);

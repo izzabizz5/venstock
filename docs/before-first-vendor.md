@@ -64,7 +64,6 @@ These don't exist yet. Each needs code, tests and review (ask Claude to build th
 - [ ] **Error visibility:** turn on Workers Logs (an `[observability]` block in the generated deploy config, which
   `scripts/lib/wrangler-config.mjs` doesn't write yet) and set up an alert on repeated 5xx responses. Server errors
   are logged with method, path and vendor id, never request bodies.
-- [ ] **A delete-vendor script**, or accept the manual procedure in `docs/runbook.md` ("Deleting a vendor").
 
 ## 7. Drill: a remote migration that fails halfway keeps nothing
 Locally, a failing migration file is rolled back completely (`tests/migrate.test.mjs`). Cloudflare documents the

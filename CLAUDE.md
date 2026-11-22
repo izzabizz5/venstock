@@ -40,11 +40,18 @@ node scripts/create-tenant.mjs <slug> "<Vendor name>" owner@example.com   # regi
 node scripts/create-tenant.mjs --resume <slug>     # finish one that stopped part-way (each step is safe to repeat)
 node scripts/create-tenant.mjs --abandon <slug>    # provisioning only: mark deleted, print the database to drop BY HAND
 node scripts/add-admin.mjs --tenant <slug> you@example.com    # add or reset an admin in that vendor's own database
+node scripts/suspend-tenant.mjs <slug> [--resume] [--reason "<why>"]  # active <-> suspended (control only), audited
+node scripts/delete-tenant.mjs <slug> --confirm <slug>        # SOFT delete of a suspended vendor; never drops a database
 node scripts/create-platform-admin.mjs you@example.com        # Venstock staff: invite for http://admin.localhost:8788
 node scripts/create-platform-admin.mjs --disable you@example.com   # staff leaves: no login, sessions + support sessions ended
 node scripts/build-config.mjs                      # write .wrangler-generated/local/wrangler.toml from the registry
 node scripts/release.mjs --local                   # release checks; the user runs the remote form, never Claude
 ```
+`suspend-tenant` and `delete-tenant` keep their rules in `scripts/lib/tenant-status.mjs` (pure; status changes are
+guarded by the expected status, the audit entry is written only if the change took effect, open support sessions on
+the vendor end). `delete-tenant` refuses unless the vendor is suspended and `--confirm` repeats the exact slug; it
+never drops a database or removes the registry row, so slugs are never reused. Dropping a database stays a manual
+step for the user.
 `release.mjs` refuses when a vendor is behind on migrations, an active vendor has no database id, the vendor count
 dropped since the last release (unless `--accept-removed <slugs>`), or the tests fail. It warns about vendors stuck
 in "provisioning". It only *prints* the deploy and `git tag release-…` commands: Claude never runs them.
@@ -161,10 +168,10 @@ until it is a real domain with a `[[routes]]` block for `*.<BASE_DOMAIN>/*`. Gen
 - `src/lib/validate.js`: pure request validation (restock, sale uploads).
 - `src/lib/sales.js`: records an uploaded sale: idempotent per `client_id`, priced from the vendor's own items
   (current price; the device's discount is capped at the subtotal), unknown items or show = 422, one atomic batch.
-- `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `create-tenant.mjs`, `add-admin.mjs`,
-  `create-platform-admin.mjs`, `build-config.mjs`, `release.mjs`; `scripts/lib/` holds the local/remote guard
-  (`d1-target.mjs`), the executors (`executor.mjs`, `local-d1.mjs`), the generated-config writer and the checksum
-  manifest code.
+- `scripts/`: `migrate.mjs`, `migrations-manifest.mjs`, `create-tenant.mjs`, `suspend-tenant.mjs`,
+  `delete-tenant.mjs`, `add-admin.mjs`, `create-platform-admin.mjs`, `build-config.mjs`, `release.mjs`; `scripts/lib/`
+  holds the local/remote guard (`d1-target.mjs`), the executors (`executor.mjs`, `local-d1.mjs`), the
+  generated-config writer, the checksum manifest code and the suspend/delete rules (`tenant-status.mjs`).
 - `tests/`: `node --test` harness and tests; `tests/MANUAL.md` for browser-only checks.
 - `docs/before-first-vendor.md`: the ordered launch checklist (decisions, Cloudflare setup, control database, drills,
   retention, first release). `docs/runbook.md`: onboarding, "being set up", support sessions, suspending, export,

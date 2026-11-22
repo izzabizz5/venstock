@@ -30,11 +30,34 @@ test("unknown options and --local with --remote are refused", () => {
   assert.notEqual(script("create-tenant.mjs", ["zzz-shop", "Z", "z@example.test", "--remte"]).code, 0);
   assert.notEqual(script("add-admin.mjs", ["--tenant", "acme", "z@example.test", "--local", "--remote"]).code, 0);
   assert.notEqual(script("create-tenant.mjs", ["--resume", "a", "--abandon", "b"]).code, 0);
+  assert.notEqual(script("suspend-tenant.mjs", ["acme", "--resum"]).code, 0);
+  assert.notEqual(script("delete-tenant.mjs", ["acme", "--confirm", "acme", "--force"]).code, 0);
+});
+
+test("suspend-tenant and delete-tenant refuse bad arguments before opening any database", () => {
+  for (const [name, args, why] of [
+    ["suspend-tenant.mjs", [], /Usage: node scripts\/suspend-tenant\.mjs/],
+    ["suspend-tenant.mjs", ["acme", "demo"], /Usage/],
+    ["suspend-tenant.mjs", ["Acme"], /Bad slug "Acme"/],
+    ["suspend-tenant.mjs", ["acme", "--reason", "a\u0007b"], /1-200 characters/],
+    ["delete-tenant.mjs", ["acme"], /pass --confirm acme \(the exact slug\)/],
+    ["delete-tenant.mjs", ["acme", "--confirm"], /--confirm needs a value/],
+    ["delete-tenant.mjs", ["acme", "--confirm", "demo"], /pass --confirm acme/],
+    ["delete-tenant.mjs", ["acme", "--confirm", "ACME"], /pass --confirm acme/],
+    ["delete-tenant.mjs", ["acme", "--confirm", "acme", "--remote", "--local"], /not both/],
+  ]) {
+    const r = script(name, args);
+    assert.equal(r.code, 1, `${name} ${args.join(" ")}`);
+    assert.match(r.out, why, `${name} ${args.join(" ")}`);
+    assert.doesNotMatch(r.out, /About to touch/, "refused before choosing a database");
+  }
+  assert.ok(!existsSync(join(dir, "state")), "no local database was created");
 });
 
 test("--remote is refused while wrangler.toml's CONTROL id is a placeholder", () => {
   for (const [name, args] of [["create-tenant.mjs", ["zzz-shop", "Z", "z@example.test"]], ["add-admin.mjs", ["--tenant", "acme", "z@example.test"]],
-    ["create-platform-admin.mjs", ["z@example.test"]], ["migrate.mjs", []], ["build-config.mjs", []]]) {
+    ["create-platform-admin.mjs", ["z@example.test"]], ["migrate.mjs", []], ["build-config.mjs", []],
+    ["suspend-tenant.mjs", ["acme"]], ["suspend-tenant.mjs", ["acme", "--resume"]], ["delete-tenant.mjs", ["acme", "--confirm", "acme"]]]) {
     const r = script(name, [...args, "--remote"]);
     assert.notEqual(r.code, 0, name);
     assert.match(r.out, /set CONTROL's database_id/, name);
@@ -57,7 +80,8 @@ test("--remote is refused until BASE_DOMAIN is the real vendor domain with a wil
       [withId.replace('BASE_DOMAIN = "localhost"', 'BASE_DOMAIN = "shops.example"'), /add a \[\[routes\]\] block/]]) {
       writeFileSync(join(copy, "wrangler.toml"), toml);
       for (const [name, args] of [["build-config.mjs", []], ["migrate.mjs", []], ["create-platform-admin.mjs", ["z@example.test"]],
-        ["create-tenant.mjs", ["zzz-shop", "Z", "z@example.test"]], ["release.mjs", []]]) {
+        ["create-tenant.mjs", ["zzz-shop", "Z", "z@example.test"]], ["release.mjs", []],
+        ["suspend-tenant.mjs", ["zzz-shop"]], ["delete-tenant.mjs", ["zzz-shop", "--confirm", "zzz-shop"]]]) {
         const r = run(name, args);
         assert.notEqual(r.status, 0, name);
         assert.match(`${r.stdout}${r.stderr}`, why, name);
