@@ -58,13 +58,22 @@ const SESSION_COLUMNS = `s.id, s.admin_id, s.tenant_id, s.expires_at, s.entered_
   FROM support_sessions s JOIN platform_admins a ON a.id = s.admin_id`;
 
 // Uses the one-time code from the admin's link, at THIS vendor's host. Returns { token, session } or null.
-export async function enterSupport(env, code, tenantId, now = Date.now()) {
+// client: who used it ("ip …, ua …"), for the audit log, so a link that leaked can be traced.
+// A valid code tried at ANOTHER vendor's host has leaked or been misused: that ends its session for good.
+export async function enterSupport(env, code, tenantId, { now = Date.now(), client = "" } = {}) {
   if (typeof code !== "string" || code.length < 20 || code.length > 100) return null;
   const s = await env.CONTROL.prepare(`SELECT ${SESSION_COLUMNS} WHERE s.code_hash = ?`).bind(await sha256(code)).first();
   if (!s) return null;
   if (s.tenant_id !== tenantId || s.ended_at || s.expires_at <= now || s.entered_at) {
+    const wrongHost = s.tenant_id !== tenantId;
+    if (wrongHost) {
+      await env.CONTROL
+        .prepare("UPDATE support_sessions SET code_hash = NULL, ended_at = COALESCE(ended_at, ?), ended_by = COALESCE(ended_by, 'wrong-host') WHERE id = ?")
+        .bind(new Date(now).toISOString(), s.id)
+        .run();
+    }
     await audit(env, { admin_id: s.admin_id, tenant_id: tenantId, support_session_id: s.id, action: "support.enter.refused",
-      detail: s.tenant_id !== tenantId ? `link is for tenant ${s.tenant_id}` : "ended, expired or already used" });
+      detail: `${wrongHost ? `link is for tenant ${s.tenant_id}; session ended` : "ended, expired or already used"}; ${client}` });
     return null;
   }
   const token = randomToken();
@@ -73,7 +82,7 @@ export async function enterSupport(env, code, tenantId, now = Date.now()) {
     .bind(await sha256(token), new Date(now).toISOString(), s.id)
     .run();
   if (!r.meta.changes) return null; // the same link used twice at once: only one wins
-  await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.enter" });
+  await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.enter", detail: client });
   return { token, session: s };
 }
 

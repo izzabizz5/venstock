@@ -30,7 +30,7 @@ const startSupport = async (slug, reason = "Vendor reports missing sales after t
 };
 // Uses the one-time link at a host; returns the support cookie (or the failed response).
 async function enter(host, code) {
-  const r = await at(host, "/api/support/enter", { method: "POST", body: { code } });
+  const r = await at(host, "/api/support/enter", { method: "POST", body: { code }, headers: { "user-agent": "support-test/1" } });
   const set = [].concat(r.headers["set-cookie"] || [])[0] || "";
   return { r, set, cookie: set.split(";")[0] };
 }
@@ -50,14 +50,27 @@ test("starting needs a reason and an active vendor; the link points at that vend
     "starting is only possible at the admin host, even for a vendor's admin");
 });
 
-test("the link works once, only at its own vendor's host, and sets a host-only __Host-pos_support cookie", async () => {
+test("a link tried at another vendor's host is refused there and ends its session for good", async () => {
   const s = await startSupport("demo");
   const wrongHost = await enter("acme.localhost", s.code);
   assert.equal(wrongHost.r.status, 400);
   assert.equal(wrongHost.set, "");
-  assert.equal(auditActions().at(-1).action, "support.enter.refused");
+  const refused = auditActions().at(-1);
+  assert.equal(refused.action, "support.enter.refused");
+  assert.equal(refused.tenant_id, 2, "recorded against the host it was tried at");
+  assert.match(refused.detail, /^link is for tenant 1; session ended; ip \S+, ua support-test\/1$/);
+  assert.equal((await enter("demo.localhost", s.code)).r.status, 400, "the leaked link no longer works at its own host");
+  assert.deepEqual(server.query("CONTROL", `SELECT code_hash, ended_by FROM support_sessions WHERE id = ${s.id}`),
+    [{ code_hash: null, ended_by: "wrong-host" }]);
+});
+
+test("the link works once, only at its own vendor's host, and sets a host-only __Host-pos_support cookie", async () => {
+  const s = await startSupport("demo");
   const ok = await enter("demo.localhost", s.code);
   assert.equal(ok.r.status, 200);
+  const entered = auditActions().at(-1);
+  assert.equal(entered.action, "support.enter");
+  assert.match(entered.detail, /^ip \S+, ua support-test\/1$/, "who used the link is recorded");
   assert.match(ok.set, /^__Host-pos_support=[^;]+; Path=\/; HttpOnly; Secure; SameSite=Strict; Max-Age=(17\d\d|1800)$/);
   assert.equal((await enter("demo.localhost", s.code)).r.status, 400, "a second use is refused");
   assert.equal((await enter("demo.localhost", "x".repeat(32))).r.status, 400);

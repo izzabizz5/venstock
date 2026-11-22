@@ -137,13 +137,17 @@ function apiRoute(url) {
   }
 }
 
+// Who is using a support link, for the audit log: the address Cloudflare saw and the browser (both cut short).
+const clientDescription = (request) =>
+  `ip ${(request.headers.get("cf-connecting-ip") || "unknown").slice(0, 64)}, ua ${(request.headers.get("user-agent") || "none").slice(0, 200)}`;
+
 // POST /api/support/enter { code }: the one-time code from the admin's link, for THIS vendor only.
 // POST /api/support/end: the banner's End button.
 async function supportRoutes(request, env, tenant, route) {
   const [, action] = route;
   if (action === "enter" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));
-    const entered = await enterSupport(env, body.code, tenant.id);
+    const entered = await enterSupport(env, body.code, tenant.id, { client: clientDescription(request) });
     if (!entered) return Response.json({ error: "That support link is invalid, already used or expired." }, { status: 400, headers: NO_STORE });
     const seconds = Math.max(1, Math.floor((entered.session.expires_at - Date.now()) / 1000));
     return Response.json({ ok: true, expires_at: entered.session.expires_at },
