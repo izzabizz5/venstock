@@ -118,6 +118,12 @@ Fill demo first: `node scripts/seed-demo.mjs --replace` (local only; wipes demo'
 7. Nothing anywhere has rounded corners or soft shadows; no emoji appear as icons.
 8. Offline (developer tools → Network → Offline), reload: the fonts and colours are the same as online (they are
    in the app-shell cache).
+9. Sales with a failed sale (see "A sale the server refuses…" above): a brick-red block says what happened, each
+   failed sale has a brick edge and its reason in words; the header shows "1 failed" in a dark block.
+10. In a support session (see the platform admin section): a mustard banner with "End now" across the top; scroll
+    the Sell screen on a laptop: the banner and the header both stay, the header below the banner, nothing hidden.
+11. The staff admin page (`admin.localhost`) has a dark ink header, never the sky one, so it can't be mistaken for a
+    shop. A new support link shows a mustard card with a large countdown and an orange Open button.
 
 ## Results
 | Check | Browser and version | Date | Result |

@@ -377,21 +377,70 @@ body[data-screen="items"] h3 { margin-top: var(--s4); padding-top: var(--s4); bo
 body[data-screen="shows"] .card.row { margin: 0; padding: var(--s3) 0; border-top: 0; border-bottom: var(--hair-w) solid var(--hair); }
 body[data-screen="shows"] .page > p:last-child { margin-top: var(--s5); }
 
-/* ---------- account and support (restyled in the next stage) ---------- */
-.stack { display: flex; flex-direction: column; gap: var(--s2); margin-top: var(--s2); max-width: 360px; }
+/* ---------- account ---------- */
+body[data-screen="account"] .page { max-width: 760px; }
+/* who is logged in: a sky strip at the top */
+body[data-screen="account"] .page > .card.row:first-child {
+  margin: 0 0 var(--s6); padding: var(--s3) var(--s4); border: 0; background: var(--tile-on); font-size: var(--fs-m);
+}
+body[data-screen="account"] .page > .card.row:first-child .pill.gray { background: var(--invert-bg); color: var(--invert-fg); }
+.stack { display: flex; flex-direction: column; gap: var(--s3); margin-top: var(--s3); max-width: 420px; }
 .stack button { align-self: flex-start; }
-.invite { margin: var(--s2) 0; padding: var(--s3) var(--s4); background: var(--mark); color: var(--on-mark); }
+.user-row { margin: 0; padding: var(--s3) 0; border-bottom: var(--hair-w) solid var(--hair); }
+.user-row .muted { line-height: 1.5; }
+.add-user { margin-top: var(--s4); padding-top: var(--s2); }
+/* a new invite: a mustard field with the link to send */
+.invite { margin: var(--s3) 0 var(--s4); padding: var(--s4); background: var(--mark); color: var(--on-mark); }
 .invite p { margin: 0 0 var(--s2); }
-.user-row { padding-top: var(--s2); border-top: var(--hair-w) solid var(--hair); }
-.add-user { margin-top: var(--s3); padding-top: var(--s3); border-top: var(--hair-w) solid var(--hair); }
+.invite .muted { color: var(--on-mark); }
+.invite input[data-inviteurl] { width: 100%; font-variant-numeric: tabular-nums; }
+.invite button.sm:not(.go) { background: none; color: var(--on-mark); border-color: var(--on-mark); }
+
 .notice .sm { margin-left: 6px; border-color: var(--on-mark); color: var(--on-mark); background: none; }
 .notice .sm.go { background: var(--action); color: var(--on-action); border-color: var(--action-edge); }
-/* a Venstock support session (read-only) on a vendor's site */
+
+/* ---------- a Venstock support session (read-only) on a vendor's site ---------- */
 .support-banner {
-  position: sticky; top: 0; z-index: 50; padding: var(--s2) var(--s3); background: var(--mark); color: var(--on-mark);
-  font-weight: 600; text-align: center;
+  position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: center; gap: var(--s3); flex-wrap: wrap;
+  min-height: var(--banner-h); padding: var(--s1) var(--s4); background: var(--mark); color: var(--on-mark);
+  border-bottom: var(--edge-w) solid var(--rule); font-weight: 700; text-align: center;
 }
-.support-banner .sm { margin-left: var(--s2); border-color: var(--on-mark); color: var(--on-mark); }
+.support-banner .sm { margin: 0; min-height: 40px; background: var(--invert-bg); color: var(--invert-fg); border-color: var(--invert-bg); }
+/* both stick to the top: the header (and the order panel) sit below the banner */
+body:has(> .support-banner) header { top: var(--banner-h); }
+body:has(> .support-banner) .order { top: calc(var(--header-h) + var(--banner-h)); height: calc(100vh - var(--header-h) - var(--banner-h)); }
+
+/* ---------- the Venstock staff admin page (admin.<BASE_DOMAIN>) ---------- */
+/* an ink band, not the sky one: staff must never mistake it for a vendor's shop */
+body[data-screen="admin"] header { align-items: center; gap: var(--s4); padding: 0 var(--s5); background: var(--invert-bg); color: var(--invert-fg); }
+body[data-screen="admin"] header strong { font-size: 20px; font-weight: 900; font-stretch: var(--wide); text-transform: uppercase; }
+body[data-screen="admin"] #who { margin-left: auto; color: var(--invert-fg); }
+body[data-screen="admin"] .page > h2 {
+  margin: var(--s6) 0 0; padding-top: var(--s4); border-top: var(--rule-w) solid var(--rule); font-size: var(--fs-xl);
+}
+body[data-screen="admin"] .page > h2:first-child { margin-top: 0; }
+body[data-screen="admin"] .page > .card { margin: 0; padding: var(--s3) 0; border-top: 0; border-bottom: var(--hair-w) solid var(--hair); }
+body[data-screen="admin"] .page > .card .row { margin: 0; }
+body[data-screen="admin"] .page > .card strong { font: 700 var(--fs-m) var(--font-sans); }
+body[data-screen="admin"] .page > div.muted {
+  padding: var(--s2) 0; border-bottom: var(--hair-w) solid var(--hair); font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+/* staff login, sign-up and code forms */
+#login, #signup, #mfa { display: flex; flex-direction: column; gap: var(--s3); max-width: 420px; margin-top: var(--s4); }
+#login input, #signup input, #mfa input { height: 52px; padding: 0 14px; border: var(--edge-w) solid var(--edge); background: var(--page); font-size: 17px; }
+#mfa input { font-size: 26px; letter-spacing: .3em; font-variant-numeric: tabular-nums; }
+#login button, #signup button, #mfa button {
+  min-height: 56px; border: var(--edge-w) solid var(--action-edge); background: var(--action); color: var(--on-action);
+  font-weight: 700; font-stretch: var(--wide); letter-spacing: var(--track); text-transform: uppercase; font-size: 14px;
+}
+body[data-screen="admin"] .page > svg { display: block; width: 216px; height: auto; padding: var(--s2); background: var(--qr-bg); border: var(--edge-w) solid var(--edge); }
+/* the one-time support link: a mustard field, the countdown large */
+#supportLink { margin: 0 0 var(--s6); padding: var(--s5); border: 0; background: var(--mark); color: var(--on-mark); }
+#supportLink > strong:first-child { font: 700 24px/1.2 var(--font-serif); }
+#supportLink .muted, #supportLink .warn { color: var(--on-mark); }
+#supportLink strong.warn { font-size: 22px; font-weight: 900; font-stretch: var(--wide); font-variant-numeric: tabular-nums; }
+#supportLink p.warn { padding-left: var(--s3); border-left: var(--rule-w) solid var(--on-mark); font-weight: 700; }
+#supportLink button.sm { min-height: 56px; padding: 0 var(--s5); background: var(--action); color: var(--on-action); border-color: var(--action-edge); }
 
 /* ---------- small laptops / tablets ---------- */
 @media (max-width: 1000px) {
@@ -470,6 +519,11 @@ body[data-screen="shows"] .page > p:last-child { margin-top: var(--s5); }
     max-width: none; max-height: 92vh; border-width: var(--rule-w) 0 0; padding: var(--s4) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom));
   }
   .page { padding: var(--s4) var(--s3) var(--s6); }
+  .support-banner { position: static; }
+  body:has(> .support-banner) header { top: 0; }
+  body[data-screen="admin"] header { padding: 0 var(--s4); }
+  body[data-screen="admin"] header strong { font-size: 15px; white-space: nowrap; }
+  body[data-screen="admin"] #who { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body[data-screen="items"] .page { grid-template-columns: minmax(0, 1fr); }
   .card > strong:first-child { font-size: 22px; }
   body[data-screen="sales"] .card:has(> strong:only-child) { padding: var(--s4); }

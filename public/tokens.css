@@ -114,6 +114,7 @@
   --edge-w: 2px;
   --rule-w: 6px;
   --header-h: 64px;
+  --banner-h: 48px;                   /* the support-session banner */
   --panel-w: 400px;
 }
 
