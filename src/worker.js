@@ -91,7 +91,7 @@ async function serve(request, env) {
       return Response.json({ error: "This account is suspended. Contact Venstock support." }, { status: 403, headers: NO_STORE });
     case "platform": {
       // The platform admin page; everything else (script, styles) is an ordinary static file.
-      if (!api) return env.ASSETS.fetch(url.pathname === "/" || url.pathname === "/index.html" ? new Request(new URL("/admin", url), request) : request);
+      if (!api) return noFraming(await env.ASSETS.fetch(url.pathname === "/" || url.pathname === "/index.html" ? new Request(new URL("/admin", url), request) : request));
       const route = apiRoute(url);
       if (!route) return Response.json({ error: "Not found" }, { status: 404 });
       return handlePlatformApi({ request, db: v.db, params: { route } });
@@ -126,6 +126,15 @@ async function serve(request, env) {
 
   // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.
   return handleApi({ request, db: v.db, tenant: v.tenant, params: { route } });
+}
+
+// The admin host's files may never be shown inside another site's frame (clicks on End or Log out tricked out of
+// a staff member).
+function noFraming(res) {
+  const out = new Response(res.body, res);
+  out.headers.set("x-frame-options", "DENY");
+  out.headers.set("content-security-policy", "frame-ancestors 'none'");
+  return out;
 }
 
 // The decoded path segments after /api (the same shape Pages Functions gave [[route]].js), or null if undecodable.

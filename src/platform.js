@@ -12,7 +12,8 @@ import { makeAuth, PLATFORM_REALM, sha256, randomToken } from "./lib/auth.js";
 import { SUPPORT_MINUTES } from "./lib/control.js";
 
 const { currentSession, authRoutes } = makeAuth(PLATFORM_REALM);
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
+const json = (data, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const fail = (error, status = 400) => json({ error }, status);
 
 export async function handlePlatformApi({ request, db, params }) {

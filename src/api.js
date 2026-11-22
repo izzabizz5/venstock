@@ -7,7 +7,7 @@ import { recordSale } from "./lib/sales.js";
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" }, // vendor data: never kept in a cache
   });
 const fail = (msg, status = 400) => json({ error: msg }, status);
 
@@ -18,6 +18,7 @@ const csvResponse = (rows, filename) =>
   new Response(rows.join("\n"), {
     headers: {
       "content-type": "text/csv",
+      "cache-control": "no-store",
       "content-disposition": `attachment; filename="${filename}"`,
     },
   });

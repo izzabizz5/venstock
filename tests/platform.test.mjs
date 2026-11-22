@@ -30,7 +30,10 @@ test("admin.localhost serves the admin page; vendor hosts serve the vendor app a
   const page = await at("admin.localhost", "/");
   assert.equal(page.status, 200);
   assert.match(page.text, /<title>Venstock admin<\/title>/);
+  assert.equal(page.headers["x-frame-options"], "DENY", "never shown inside another site's frame");
+  assert.equal(page.headers["content-security-policy"], "frame-ancestors 'none'");
   assert.equal((await at("admin.localhost", "/admin.js")).status, 200);
+  assert.equal((await at("admin.localhost", "/api/auth/me")).headers["cache-control"], "no-store");
   assert.match((await at("demo.localhost", "/")).text, /<title>Venstock<\/title>/);
   for (const p of ["/admin", "/admin.html", "/admin.js"]) assert.equal((await at("demo.localhost", p)).status, 404, p);
 });

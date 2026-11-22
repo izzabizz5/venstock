@@ -3,7 +3,7 @@
 
 const enc = new TextEncoder();
 const json = (data, status = 200, headers = {}) =>
-  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...headers } });
+  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "cache-control": "no-store", ...headers } });
 const fail = (msg, status = 400, headers) => json({ error: msg }, status, headers);
 
 const MINUTE = 60 * 1000;

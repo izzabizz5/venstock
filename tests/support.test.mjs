@@ -81,7 +81,9 @@ test("in a support session: reads work, the app is told it's support, and every 
   const { cookie } = await enter("demo.localhost", (await startSupport("demo")).code);
   const items = await at("demo.localhost", "/api/items", { headers: { cookie } });
   assert.equal(items.status, 200);
+  assert.equal(items.headers["cache-control"], "no-store", "vendor data is never kept in the staff browser's cache");
   assert.deepEqual(items.json.map((i) => i.name), ["demo-marker"]);
+  assert.equal((await at("demo.localhost", "/api/export", { headers: { cookie } })).headers["cache-control"], "no-store");
   const me = await at("demo.localhost", "/api/auth/me", { headers: { cookie } });
   assert.equal(me.json.support.admin_email, PLATFORM_ADMIN.email);
   assert.equal(me.json.is_admin, true);
