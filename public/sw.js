@@ -1,7 +1,7 @@
 // Caches the app shell so it opens with no signal. Data is handled in app.js. The rules live in sync.js
 // (VenstockSync.shellFetch), shared with the app and tested in tests/sync.unit.test.mjs.
 importScripts("/sync.js");
-const CACHE = "venstock-v15";
+const CACHE = "venstock-v16";
 const SHELL = ["/", "/app.js", "/sync.js", "/style.css", "/manifest.webmanifest", "/vendor/qrcode.js"];
 
 self.addEventListener("install", (e) => {

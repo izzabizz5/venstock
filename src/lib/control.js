@@ -45,6 +45,8 @@ export const platformDatabase = (env) => env.CONTROL;
 // A platform admin opens a one-time link at the vendor's own host; that host swaps the code for a host-only cookie
 // valid for that vendor only, read-only, until the session ends or its 30 minutes run out.
 export const SUPPORT_MINUTES = 30;
+// The one-time link must be opened within this many seconds of being made (the session itself lasts SUPPORT_MINUTES).
+export const LINK_SECONDS = 60;
 
 // One line in the audit log. detail never holds request bodies.
 export async function audit(env, { admin_id = null, tenant_id = null, support_session_id = null, action, detail = "" }) {
@@ -54,7 +56,7 @@ export async function audit(env, { admin_id = null, tenant_id = null, support_se
     .run();
 }
 
-const SESSION_COLUMNS = `s.id, s.admin_id, s.tenant_id, s.expires_at, s.entered_at, s.ended_at, a.email AS admin_email
+const SESSION_COLUMNS = `s.id, s.admin_id, s.tenant_id, s.created_at, s.expires_at, s.entered_at, s.ended_at, a.email AS admin_email
   FROM support_sessions s JOIN platform_admins a ON a.id = s.admin_id AND a.disabled_at IS NULL`; // a disabled admin's sessions stop
 
 // Uses the one-time code from the admin's link, at THIS vendor's host. Returns { token, session } or null.
@@ -64,7 +66,8 @@ export async function enterSupport(env, code, tenantId, { now = Date.now(), clie
   if (typeof code !== "string" || code.length < 20 || code.length > 100) return null;
   const s = await env.CONTROL.prepare(`SELECT ${SESSION_COLUMNS} WHERE s.code_hash = ?`).bind(await sha256(code)).first();
   if (!s) return null;
-  if (s.tenant_id !== tenantId || s.ended_at || s.expires_at <= now || s.entered_at) {
+  const linkExpired = Date.parse(s.created_at) + LINK_SECONDS * 1000 <= now;
+  if (s.tenant_id !== tenantId || s.ended_at || s.expires_at <= now || s.entered_at || linkExpired) {
     const wrongHost = s.tenant_id !== tenantId;
     if (wrongHost) {
       await env.CONTROL
@@ -73,7 +76,7 @@ export async function enterSupport(env, code, tenantId, { now = Date.now(), clie
         .run();
     }
     await audit(env, { admin_id: s.admin_id, tenant_id: tenantId, support_session_id: s.id, action: "support.enter.refused",
-      detail: `${wrongHost ? `link is for tenant ${s.tenant_id}; session ended` : "ended, expired or already used"}; ${client}` });
+      detail: `${wrongHost ? `link is for tenant ${s.tenant_id}; session ended` : linkExpired && !s.entered_at && !s.ended_at ? `link older than ${LINK_SECONDS} s` : "ended, expired or already used"}; ${client}` });
     return null;
   }
   const token = randomToken();

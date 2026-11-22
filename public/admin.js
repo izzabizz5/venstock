@@ -69,7 +69,7 @@ async function load() {
 function dashboard() {
   $("#who").textContent = me.email;
   const link = lastLink ? `<div class="card"><strong>Support link for ${esc(lastLink.slug)}</strong>
-    <p class="muted">One use only, valid until ${esc(when(lastLink.expires_at))}. It opens ${esc(lastLink.slug)}'s own site, read-only.</p>
+    <p class="muted">Open it within a minute (by ${esc(new Date(lastLink.link_expires_at).toLocaleTimeString())}); it works once. It opens ${esc(lastLink.slug)}'s own site, read-only, until ${esc(when(lastLink.expires_at))}.</p>
     <a href="${esc(lastLink.url)}" target="_blank" rel="noopener"><button class="sm">Open support session</button></a></div>` : "";
   view(`<div class="page">${note()}${link}
     <h2>Vendors</h2>

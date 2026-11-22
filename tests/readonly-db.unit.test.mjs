@@ -41,3 +41,20 @@ test("batch only takes statements made by the wrapper; exec and dump are not ava
   assert.throws(() => db.dump(), ReadOnlyError);
   assert.ok(Object.isFrozen(db));
 });
+
+test("account secrets and sessions are never readable, even with SELECT", () => {
+  const real = fakeDb();
+  const db = readOnlyDb(real);
+  for (const sql of ["SELECT password_hash FROM users", "SELECT totp_secret FROM users WHERE id = 1", "SELECT invite_hash, email FROM users",
+    "SELECT * FROM users", "SELECT u.* FROM users u", "SELECT id FROM sessions", "SELECT s.id, u.email FROM sessions s JOIN users u ON u.id = s.user_id",
+    "SELECT email FROM users WHERE password_hash = 'x'"]) {
+    assert.throws(() => db.prepare(sql), ReadOnlyError, sql);
+  }
+  assert.equal(real.made.length, 0);
+  // The users list (src/lib/auth.js) still works: it only asks whether a password is set.
+  assert.doesNotThrow(() => db.prepare(`SELECT id, email, is_admin, created_at, invite_expires,
+                password_hash IS NOT NULL AS has_password, totp_enabled
+         FROM users ORDER BY email`));
+  assert.doesNotThrow(() => db.prepare("SELECT count(*) AS n FROM users"));
+  assert.doesNotThrow(() => db.prepare("SELECT * FROM items ORDER BY id"));
+});

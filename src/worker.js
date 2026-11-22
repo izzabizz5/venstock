@@ -16,6 +16,7 @@ import { resolveVendor } from "./lib/tenant.js";
 import { enterSupport, supportSession, endSupport, audit, supportHistory } from "./lib/control.js";
 import { readCookie, sessionCookie, SUPPORT_COOKIE, clientDescription, currentSession } from "./lib/auth.js";
 import { readOnlyDb } from "./lib/readonly-db.js";
+import { redactForSupport } from "./lib/redact.js";
 
 
 const isApi = (path) => path === "/api" || path.startsWith("/api/");
@@ -37,16 +38,25 @@ const SETTING_UP_PAGE = `<!doctype html>
 
 export default {
   async fetch(request, env) {
+    let res;
     try {
-      return await serve(request, env);
+      res = await serve(request, env);
     } catch (e) {
       // Anything unexpected (e.g. the control database unreachable): a generic answer, details only in the log.
       const url = new URL(request.url);
       console.error(`venstock: 500 ${request.method} ${url.hostname}${url.pathname}: ${e?.stack || e}`);
-      return plain(500, "Something went wrong", isApi(url.pathname));
+      res = plain(500, "Something went wrong", isApi(url.pathname));
     }
+    return noReferrer(res);
   },
 };
+
+// No page of ours ever tells another site where the visitor came from (Referer), on any host.
+function noReferrer(res) {
+  const out = new Response(res.body, res);
+  out.headers.set("referrer-policy", "no-referrer");
+  return out;
+}
 
 // Forged requests from another origin, including sibling subdomains (same-site, so SameSite=Strict cookies still go
 // with them). Every request that can change something (anything but GET/HEAD) must:
@@ -124,7 +134,7 @@ async function serve(request, env) {
       return Response.json({ error: "Support sessions are read-only." }, { status: 403, headers: NO_STORE });
     }
     await audit(env, { admin_id: s.admin_id, tenant_id: s.tenant_id, support_session_id: s.id, action: "support.request", detail: where });
-    return handleApi({ request, db: readOnlyDb(v.db), tenant: v.tenant, params: { route }, support: { admin_email: s.admin_email, expires_at: s.expires_at } });
+    return redactForSupport(await handleApi({ request, db: readOnlyDb(v.db), tenant: v.tenant, params: { route }, support: { admin_email: s.admin_email, expires_at: s.expires_at } }));
   }
 
   // Only this vendor's database and registry row. The real env (CONTROL, other vendors' bindings) stays here.

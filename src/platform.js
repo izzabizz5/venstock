@@ -9,7 +9,7 @@
 //   POST /api/platform/support/<id>/end
 //   GET  /api/platform/audit      the latest audit log entries
 import { makeAuth, PLATFORM_REALM, sha256, randomToken, clientDescription } from "./lib/auth.js";
-import { SUPPORT_MINUTES } from "./lib/control.js";
+import { SUPPORT_MINUTES, LINK_SECONDS } from "./lib/control.js";
 
 const { currentSession, authRoutes } = makeAuth(PLATFORM_REALM);
 const json = (data, status = 200) =>
@@ -64,7 +64,9 @@ export async function handlePlatformApi({ request, db, params }) {
       await auditRow(db, { admin_id: sess.id, tenant_id: tenant.id, support_session_id: id, action: "support.start", detail: reason });
       // The vendor's host is this host with "admin." replaced by the vendor's slug (same scheme and port).
       const vendorHost = url.host.replace(/^admin\./, `${tenant.slug}.`);
-      return json({ id, expires_at: expires, url: `${url.protocol}//${vendorHost}/#support=${code}` });
+      // The code goes in the URL fragment: browsers never send it to a server, never put it in a Referer header,
+      // and it never appears in request logs. The vendor page removes it from the address bar and POSTs it.
+      return json({ id, expires_at: expires, link_expires_at: Date.now() + LINK_SECONDS * 1000, url: `${url.protocol}//${vendorHost}/#support=${code}` });
     }
 
     if (b === "support" && c && d === "end" && m === "POST") {
