@@ -12,6 +12,7 @@ import { readdirSync, mkdtempSync, rmSync, cpSync, mkdirSync, writeFileSync, rea
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tomlFor } from "./wrangler-toml.mjs";
 import { localRun } from "../scripts/lib/local-d1.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -23,9 +24,7 @@ let copy, npxLog;
 before(() => {
   copy = mkdtempSync(join(tmpdir(), "venstock-parity-"));
   for (const p of ["scripts", "src", "migrations", "public", "package.json"]) cpSync(join(ROOT, p), join(copy, p), { recursive: true });
-  writeFileSync(join(copy, "wrangler.toml"), readFileSync(join(ROOT, "wrangler.toml"), "utf8")
-    .replace(/BASE_DOMAIN = "localhost"/, 'BASE_DOMAIN = "shops.example"\n\n[[routes]]\npattern = "*.shops.example/*"\nzone_name = "shops.example"')
-      .replace(/(binding = "CONTROL"\ndatabase_name = "venstock-dev-control"\ndatabase_id = )"<>"/, `$1"${CONTROL_ID}"`));
+  writeFileSync(join(copy, "wrangler.toml"), tomlFor({ domain: "shops.example", controlId: CONTROL_ID }));
   // migrations' checksums are checked against the latest release-* tag; the copy has no git, so no tags.
   mkdirSync(join(copy, "bin"));
   npxLog = join(copy, "npx.log");

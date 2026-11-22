@@ -7,13 +7,17 @@ import { mkdtempSync, rmSync, mkdirSync, cpSync, writeFileSync, readFileSync, ch
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tomlFor } from "./wrangler-toml.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const NOW = "2026-11-21T12:00:00Z";
-let dir, env;
+let dir, sandbox, sandboxNpxLog, env;
 
+// Scripts never run in the repo itself: the repo's wrangler.toml may hold the real launch settings, and then a
+// --remote that a guard failed to stop would reach Cloudflare. They run in a copy with a pre-launch wrangler.toml
+// (localhost, no routes, CONTROL id "<>") and a fake npx that only logs; the last test checks it was never called.
 function script(name, args = [], extraEnv = {}) {
-  const r = spawnSync(process.execPath, [join(ROOT, "scripts", name), ...args], { cwd: ROOT, encoding: "utf8", env: { ...env, ...extraEnv } });
+  const r = spawnSync(process.execPath, [join(sandbox, "scripts", name), ...args], { cwd: sandbox, encoding: "utf8", env: { ...env, ...extraEnv } });
   return { code: r.status, out: `${r.stdout}${r.stderr}` };
 }
 const node = script;
@@ -22,7 +26,16 @@ const release = (...args) => node("release.mjs", ["--local", "--skip-tests", "--
 // Throwaway local folders, in case a guard ever failed to stop a script early.
 before(() => {
   dir = mkdtempSync(join(tmpdir(), "venstock-guard-"));
-  env = { ...process.env, VENSTOCK_PERSIST_TO: join(dir, "state"), VENSTOCK_GENERATED_DIR: join(dir, "gen") };
+  sandbox = join(dir, "repo");
+  for (const p of ["scripts", "src", "migrations", "public", "package.json"]) cpSync(join(ROOT, p), join(sandbox, p), { recursive: true });
+  writeFileSync(join(sandbox, "wrangler.toml"), tomlFor());
+  mkdirSync(join(dir, "bin"));
+  sandboxNpxLog = join(dir, "npx.log");
+  writeFileSync(sandboxNpxLog, "");
+  writeFileSync(join(dir, "bin", "npx"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${sandboxNpxLog}"\necho "npx must not run in this test" >&2\nexit 97\n`);
+  chmodSync(join(dir, "bin", "npx"), 0o755);
+  env = { ...process.env, PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+    VENSTOCK_PERSIST_TO: join(dir, "state"), VENSTOCK_GENERATED_DIR: join(dir, "gen") };
 });
 after(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -68,16 +81,15 @@ test("--remote is refused until BASE_DOMAIN is the real vendor domain with a wil
   const copy = mkdtempSync(join(tmpdir(), "venstock-domain-"));
   try {
     for (const p of ["scripts", "src", "migrations", "public"]) cpSync(join(ROOT, p), join(copy, p), { recursive: true });
-    const withId = readFileSync(join(ROOT, "wrangler.toml"), "utf8")
-      .replace(/(binding = "CONTROL"\ndatabase_name = "venstock-dev-control"\ndatabase_id = )"<>"/, '$1"11111111-2222-3333-4444-555555555555"');
+    const controlId = "11111111-2222-3333-4444-555555555555";
     mkdirSync(join(copy, "bin"));
     const npxLog = join(copy, "npx.log");
     writeFileSync(join(copy, "bin", "npx"), `#!/bin/sh\nprintf '%s\\n' "$*" >> "${npxLog}"\nexit 97\n`);
     chmodSync(join(copy, "bin", "npx"), 0o755);
     const renv = { ...process.env, PATH: `${join(copy, "bin")}:${process.env.PATH}` };
     const run = (name, args) => spawnSync(process.execPath, [join(copy, "scripts", name), ...args, "--remote"], { cwd: copy, encoding: "utf8", env: renv });
-    for (const [toml, why] of [[withId, /set BASE_DOMAIN/],
-      [withId.replace('BASE_DOMAIN = "localhost"', 'BASE_DOMAIN = "shops.example"'), /add a \[\[routes\]\] block/]]) {
+    for (const [toml, why] of [[tomlFor({ controlId }), /set BASE_DOMAIN/],
+      [tomlFor({ domain: "shops.example", routes: false, controlId }), /add a \[\[routes\]\] block/]]) {
       writeFileSync(join(copy, "wrangler.toml"), toml);
       for (const [name, args] of [["build-config.mjs", []], ["migrate.mjs", []], ["create-platform-admin.mjs", ["z@example.test"]],
         ["create-tenant.mjs", ["zzz-shop", "Z", "z@example.test"]], ["release.mjs", []],
@@ -95,9 +107,7 @@ test("remote, against a copy with a real-looking control id and a fake npx: only
   const copy = mkdtempSync(join(tmpdir(), "venstock-remote-"));
   try {
     for (const p of ["scripts", "src", "migrations", "public"]) cpSync(join(ROOT, p), join(copy, p), { recursive: true });
-    writeFileSync(join(copy, "wrangler.toml"), readFileSync(join(ROOT, "wrangler.toml"), "utf8")
-      .replace(/BASE_DOMAIN = "localhost"/, 'BASE_DOMAIN = "shops.example"\n\n[[routes]]\npattern = "*.shops.example/*"\nzone_name = "shops.example"')
-      .replace(/(binding = "CONTROL"\ndatabase_name = "venstock-dev-control"\ndatabase_id = )"<>"/, '$1"11111111-2222-3333-4444-555555555555"'));
+    writeFileSync(join(copy, "wrangler.toml"), tomlFor({ domain: "shops.example", controlId: "11111111-2222-3333-4444-555555555555" }));
     mkdirSync(join(copy, "bin"));
     const log = join(copy, "npx.log");
     const cfgLog = join(copy, "configs.log");
@@ -143,19 +153,19 @@ test("a new migration file that isn't in checksums.json: refused", () => {
     cpSync(join(ROOT, "migrations", "control"), join(fresh, "control"), { recursive: true });
     cpSync(join(ROOT, "migrations", "vendor"), join(fresh, "vendor"), { recursive: true });
     writeFileSync(join(fresh, "vendor", "0002_unrecorded.sql"), "SELECT 1;\n");
-    const r = spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--migrations-root", fresh], { cwd: ROOT, encoding: "utf8", env });
+    const r = spawnSync("node", [join(sandbox, "scripts", "migrate.mjs"), "--migrations-root", fresh], { cwd: sandbox, encoding: "utf8", env });
     assert.equal(r.status, 1);
     assert.match(r.stderr, /0002_unrecorded\.sql: not in checksums\.json/);
   } finally { rmSync(fresh, { recursive: true, force: true }); }
 });
 
 test("remote refusals: custom migrations folder, and a CONTROL id that is still a placeholder", () => {
-  const r1 = spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--migrations-root", join(ROOT, "migrations"), "--remote"], { cwd: ROOT, encoding: "utf8", env });
+  const r1 = spawnSync("node", [join(sandbox, "scripts", "migrate.mjs"), "--migrations-root", join(sandbox, "migrations"), "--remote"], { cwd: sandbox, encoding: "utf8", env });
   assert.equal(r1.status, 1);
-  const r2 = spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--remote"], { cwd: ROOT, encoding: "utf8", env });
+  const r2 = spawnSync("node", [join(sandbox, "scripts", "migrate.mjs"), "--remote"], { cwd: sandbox, encoding: "utf8", env });
   assert.equal(r2.status, 1);
   assert.match(r2.stderr, /set CONTROL's database_id/);
-  assert.equal(spawnSync("node", [join(ROOT, "scripts", "migrate.mjs"), "--control", "--vendors"], { cwd: ROOT, encoding: "utf8", env }).status, 1);
+  assert.equal(spawnSync("node", [join(sandbox, "scripts", "migrate.mjs"), "--control", "--vendors"], { cwd: sandbox, encoding: "utf8", env }).status, 1);
 });
 
 test("release refuses when a released migration changed (via the latest release-* tag)", () => {
@@ -181,5 +191,9 @@ test("rehearsal-only flags are refused for a real release; a real release needs 
   const real = node("release.mjs");
   assert.equal(real.code, 1);
   assert.match(real.out, /set CONTROL's database_id/);
-  assert.ok(!existsSync(join(ROOT, ".wrangler-generated", "remote", "last-release.json")), "a refused release records nothing");
+  assert.ok(!existsSync(join(sandbox, ".wrangler-generated", "remote", "last-release.json")), "a refused release records nothing");
+});
+
+test("no script in this file ever started npx (so nothing reached wrangler or Cloudflare)", () => {
+  assert.equal(readFileSync(sandboxNpxLog, "utf8"), "");
 });
