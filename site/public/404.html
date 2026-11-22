@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/tokens.css">
   <link rel="stylesheet" href="/site.css">
 </head>
-<body>
+<body class="pg-plain">
   <a class="skip" href="#main">Skip to content</a>
   <header class="top">
     <div class="wrap">
@@ -24,14 +24,19 @@
     </div>
   </header>
 
-  <main id="main" class="doc">
-    <div class="wrap">
-      <h1>Not found</h1>
+  <main id="main">
+    <section class="band band-ink" aria-labelledby="title">
+      <div class="wrap"><h1 id="title">Not found</h1></div>
+    </section>
+    <div class="doc">
+      <div class="wrap">
       <p>There's no page at this address. <a href="/">Go to the Venstock home page</a>.</p>
+      </div>
     </div>
   </main>
 
   <footer class="foot">
+    <div class="strip" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
     <div class="wrap">
       <p>Venstock is provided by Medein LLC.</p>
       <nav aria-label="Legal"><a href="/terms">Terms</a><a href="/privacy">Privacy</a></nav>

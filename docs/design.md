@@ -154,10 +154,13 @@ The screen is built from flat color fields; a change of color stands in for a bo
   marks failed sales, always with words.
 - **Login:** a deep-blue field with the stacked wordmark beside the form (above it on phones).
 - **Public site:** the same tokens and fonts, one page per header link: Home (`/`: the opening with the
-  product's own order panel drawn in HTML, then a ruled index of the other pages), What it is (`/what`, sky band),
-  How it works (`/how`, deep-blue band), Pricing (`/pricing`, the whole page is the mustard field) and Join
-  (`/join`, ink band, the one orange button). The header marks the current page with an ink block, like the app's
-  tabs; each page ends with a full-width "Next" link. No images, no scripts, no third-party anything.
+  product's own order panel drawn in HTML, then a ruled index of the other pages), What it is (`/what`), How it
+  works (`/how`), Pricing (`/pricing`, the page under its band is the mustard field) and Join (`/join`, the one
+  orange button). Every page title sits on the same ink band. Each page has one palette colour (What sky, How mid
+  blue, Pricing mustard, Join orange) used only as small details: the stripe under its band, the underline of its
+  header tab, the squares beside facts and its marker in the home index; the footer carries all four as a strip.
+  `--accent-text` (deep blue; sky in dark) colours numerals and small labels. Type is set smaller than the app's
+  (16px body) except the header. Each page ends with a full-width "Next" link. No images, no scripts, no third-party anything.
 
 **B, "Ledger"** (cream, ink, ruled rows, a category rail) was the alternative. It was calmer, but its rows are
 smaller targets than A's tiles for fast tapping at a busy table.

@@ -6,6 +6,7 @@
    A colour token used as a text colour in style.css must appear on the left of at least one pair.
    @pair --text on --page body
    @pair --text-2 on --page body
+   @pair --accent-text on --page body
    @pair --text on --surface body
    @pair --text-2 on --surface body
    @pair --on-band on --band body
@@ -70,6 +71,7 @@
   --surface: var(--c-cream);          /* popups and sheets */
   --text: var(--c-ink);
   --text-2: var(--c-muted);
+  --accent-text: var(--c-deep);        /* coloured text accents (labels, numerals) */
   --band: var(--c-sky);               /* the header field */
   --on-band: var(--c-ink);
   --panel: var(--c-deep);             /* the order panel / money field */
@@ -128,6 +130,7 @@
   --surface: var(--c-ground-2);
   --text: var(--c-cream);
   --text-2: var(--c-muted-dark);
+  --accent-text: var(--c-sky);
   --band: var(--c-ground-2);
   --on-band: var(--c-cream);
   --panel: var(--c-deep);
