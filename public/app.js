@@ -19,6 +19,7 @@ const state = {
   upcoming: store.get("upcoming", []), // shows entered ahead of time, not started yet
   editUpcoming: null,                  // id of the upcoming show being edited
   pending: store.get("pending", []),  // sales saved on this device, not yet uploaded
+  failed: store.get("failed", []),    // sales the server refused (400/422): { sale, status, error, at }, kept until removed
   register: store.get("register", "Register 1"), // each device/person picks its own register
   // the transaction in progress on this device (kept if the page reloads)
   cart: store.get("cart", {}),        // item_id -> qty
@@ -79,19 +80,24 @@ function toast(msg) {
 // ---------- data sync ----------
 let syncing = false;
 async function sync() {
-  if (syncing || !loggedIn()) return;
+  if (syncing || !loggedIn() || inSupport()) return; // a support session never uploads (or keeps) sales
   syncing = true;
   try {
-    for (const sale of [...state.pending]) {
-      try {
-        await api("sales", { method: "POST", body: sale });
-        state.pending = state.pending.filter((s) => s !== sale);
-        store.set("pending", state.pending);
-      } catch (e) {
-        if (!e.status || e.status === 401) throw e; // offline / logged out: try again later
-        // the server refused this one: keep it on the device and keep going, so later sales still upload
-      }
+    // Rules in sync.js: 2xx uploaded; 400/422 refused for good (moved to "failed" for a person to look at); anything
+    // else (offline, logged out, 403, 404, 409, 429, 5xx) stays queued and ends this pass.
+    const post = (sale) => api("sales", { method: "POST", body: sale })
+      .then(() => ({ status: 200 }), (e) => ({ status: e.status || 0, error: e.message }));
+    const batch = [...state.pending];
+    const r = await VenstockSync.uploadPending(batch, post);
+    const finished = new Set(batch.filter((s) => !r.pending.includes(s)));
+    state.pending = state.pending.filter((s) => !finished.has(s)); // sales rung up during the pass stay queued
+    store.set("pending", state.pending);
+    if (r.failed.length) {
+      state.failed = [...state.failed, ...r.failed];
+      store.set("failed", state.failed);
+      toast(`${r.failed.length} sale${r.failed.length === 1 ? "" : "s"} couldn't be uploaded. See the Sales tab.`);
     }
+    if (r.stopped === 0 || r.stopped === 401) throw new Error("offline or logged out: try again later");
     await refresh();
     state.online = true;
   } catch (e) {
@@ -103,6 +109,7 @@ async function sync() {
 }
 
 async function refresh() {
+  const support = inSupport(); // decided once: the session may end while this runs
   const [items, settings, show, shows, upcoming] = await Promise.all([
     api("items?all=1"), api("settings"), api("shows/active"), api("shows"),
     api("shows/upcoming").catch(() => state.upcoming), // keep working if the database isn't updated yet
@@ -120,15 +127,51 @@ async function refresh() {
     const it = state.items.find((i) => i.id === l.item_id);
     if (it) it.stock -= l.qty;
   }
-  for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, state[k]);
+  // A support session never keeps the shop's data on the device (it's a Venstock staff browser).
+  if (!support && state.me) for (const k of SHOP_KEYS) store.set(k, state[k]);
+}
+
+// The shop's data as saved on this device (sales not uploaded yet, "pending" and "failed", are not in this list).
+const SHOP_KEYS = ["items", "settings", "show", "sales", "summary", "shows", "upcoming"];
+function forgetShop() {
+  for (const k of SHOP_KEYS) store.set(k, null);
+  Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null, lastInvite: null, supportVisits: null });
+}
+
+// A Venstock support session (read-only, opened from the platform admin's one-time link): /api/auth/me says so.
+// It ends by the banner's button, by running out (the API answers 401) or by a platform admin; every way out goes
+// through endedSupport(), so none of the shop's data is left in the staff member's browser.
+const inSupport = () => !!(state.me && state.me.support);
+function endedSupport(info = "The support session has ended.") {
+  forgetShop(); resetTxn();
+  state.me = null; store.set("me", null);
+  state.auth = authState("login", info);
+  state.tab = "sell";
+  if (state.modal) closeModal(false);
+  render(); paintSupportBanner();
+}
+function paintSupportBanner() {
+  let b = document.getElementById("supportBanner");
+  if (!inSupport()) { if (b) b.remove(); return; }
+  if (!b) {
+    b = document.createElement("div");
+    b.id = "supportBanner";
+    b.className = "support-banner";
+    b.setAttribute("role", "status");
+    document.body.prepend(b);
+  }
+  const until = new Date(state.me.support.expires_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  b.innerHTML = `Venstock support session: read-only, ends at ${esc(until)}. <button class="sm" data-endsupport>End now</button>`;
 }
 
 function paintHeader() {
+  paintSupportBanner();
   $("#showName").textContent = state.show ? state.show.name : "No show running";
-  const n = state.pending.length;
+  const n = state.pending.length, f = state.failed.length;
   const s = $("#sync");
-  s.textContent = n ? `${n} to upload` : state.online ? "✓ synced" : "offline";
-  s.className = n || !state.online ? "warn" : "";
+  s.textContent = [f ? `${f} failed` : "", n ? `${n} to upload` : "", !f && !n ? (state.online ? "✓ synced" : "offline") : ""].filter(Boolean).join(" · ");
+  s.className = n || f || !state.online ? "warn" : "";
+  if (f) s.dataset.tab = "sales"; else delete s.dataset.tab; // tap to see the failed sales
 }
 
 // ---------- discounts & bundle deals ----------
@@ -469,6 +512,7 @@ function paintCheckout() {
 }
 
 function completeSale() {
+  if (inSupport()) { toast("This is a read-only support session: nothing can be sold or changed."); return; }
   const t = computeTotals();
   if (!t.lines.length) return;
   if (state.payment === "cash" && state.cashGiven !== "" && toCents(state.cashGiven) < t.total
@@ -539,6 +583,24 @@ function closeModal(repaint = true) {
 }
 
 // ---------- SALES ----------
+// Sales the server refused. They never upload by themselves: someone retries (after fixing the cause, e.g. re-adding a
+// deleted item), keeps a record (CSV) and removes them.
+function failedHTML() {
+  if (!state.failed.length) return "";
+  const n = state.failed.length;
+  const time = (iso) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `
+    <div class="card failed"><strong>${n} sale${n === 1 ? "" : "s"} couldn't be uploaded</strong>
+      <p class="muted">The server refused ${n === 1 ? "this sale" : "these sales"}, so ${n === 1 ? "it isn't" : "they aren't"} in your totals.
+        ${n === 1 ? "It stays" : "They stay"} on this device until you remove ${n === 1 ? "it" : "them"}. Download a copy before removing anything.</p>
+      <button class="sm" data-failedcsv>Download as CSV</button></div>
+    ${state.failed.map((f, i) => `
+      <div class="card failed"><div class="row"><span class="grow">${f.sale.items.map((l) => `${l.qty}× ${esc(l.name)}`).join(", ")}</span>
+        <button class="sm" data-failretry="${i}">Try again</button> <button class="sm danger" data-failremove="${i}">Remove</button></div>
+        <div class="muted">${esc(time(f.sale.created_at))} · ${esc(payLabel(f.sale.payment_method))}${f.sale.register ? ` · ${esc(f.sale.register)}` : ""}</div>
+        <div class="reason">${esc(f.error)}</div></div>`).join("")}`;
+}
+
 function viewSales() {
   const regs = ["All", ...new Set([...state.sales.map((s) => s.register).filter(Boolean), ...state.pending.map((s) => s.register).filter(Boolean)])];
   const reg = regs.includes(state.salesRegister) ? state.salesRegister : "All";
@@ -554,6 +616,7 @@ function viewSales() {
     ${regs.length > 2 ? `<div class="chips">${regs.map((r) => `<button class="chip ${r === reg ? "on" : ""}" data-salesreg="${esc(r)}">${esc(r)}</button>`).join("")}</div>` : ""}
     ${state.show ? "" : `<div class="notice">No show is running, so these are sales that aren't part of any show.
       Start a show in the Shows tab to group sales.</div>`}
+    ${failedHTML()}
     <div class="card"><strong>${reg !== "All" ? esc(reg) : state.show ? "Total this show" : "Total (not in a show)"}: ${money(total)}</strong></div>
     ${pend.map((s) => {
       const sub = s.items.reduce((t, i) => t + i.qty * i.price_cents, 0);
@@ -833,7 +896,7 @@ function viewShows() {
 
 // ---------- LOGIN ----------
 // Invite-only sign-up, then password + authenticator-app code. The server does the checking
-// (functions/lib/auth.js); these screens walk through the steps.
+// (src/lib/auth.js); these screens walk through the steps.
 const loggedIn = () => state.me?.stage === "ok";
 const authState = (view = "login", info = "", extra = {}) =>
   ({ view, info, error: "", email: store.get("lastEmail", ""), invite: "", setup: null, setupFailed: false, ...extra });
@@ -925,20 +988,21 @@ function renderAuth() {
 
 // Called with the server's answer after each login step.
 function signedIn(me) {
-  store.set("lastEmail", me.email);
+  if (!me.support) store.set("lastEmail", me.email);
   if (me.stage !== "ok") {
     state.me = null; store.set("me", null);
     state.auth = authState(me.stage, "", { email: me.email });
     render();
     return;
   }
-  state.me = me; store.set("me", me);
+  state.me = me; store.set("me", me.support ? null : me); // a support session needs a connection: never remembered
   state.auth = null; state.users = null; state.lastInvite = null;
   render(); paintHeader(); sync();
 }
 
 function loggedOut(info = "") {
   if (!state.me) return;
+  if (inSupport()) return endedSupport();
   state.me = null; store.set("me", null);
   state.auth = authState("login", info);
   if (state.modal) closeModal(false);
@@ -951,8 +1015,7 @@ async function logOut() {
   try { await api("auth/logout", { method: "POST", body: {} }); }
   catch (e) { if (!e.status) { alert("You're offline. Connect to the internet to log out."); return; } }
   // forget the shop's data on this device (sales not uploaded yet are kept)
-  for (const k of ["items", "settings", "show", "sales", "summary", "shows", "upcoming"]) store.set(k, null);
-  Object.assign(state, { items: [], show: null, sales: [], summary: null, shows: [], upcoming: [], users: null, lastInvite: null });
+  forgetShop();
   resetTxn();
   state.me = null; store.set("me", null);
   state.auth = authState("login", "You're logged out.");
@@ -961,8 +1024,19 @@ async function logOut() {
 }
 
 async function boot() {
-  // invite link: /#invite=CODE&email=...
+  // invite link: /#invite=CODE&email=...   support link (from the platform admin): /#support=CODE
   const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get("support")) {
+    history.replaceState(null, "", location.pathname + location.search);
+    try {
+      await api("support/enter", { method: "POST", body: { code: h.get("support") } });
+      signedIn(await api("auth/me"));
+    } catch (e) {
+      alert(e.status ? e.message : "You're offline: support sessions need a connection.");
+      render();
+    }
+    return;
+  }
   if (h.get("invite")) {
     history.replaceState(null, "", location.pathname + location.search);
     state.me = null; store.set("me", null);
@@ -984,6 +1058,10 @@ async function loadUsers() {
   if (!state.me?.is_admin) return;
   try { state.users = await api("users"); state.usersError = ""; }
   catch (e) { state.usersError = errText(e); }
+  // Venstock support visits to this shop (not shown inside a support session itself).
+  if (!inSupport()) {
+    try { state.supportVisits = await api("account/support-sessions"); } catch { state.supportVisits = null; }
+  }
   if (state.tab === "account") softRender();
 }
 
@@ -1003,6 +1081,25 @@ function viewAccount() {
       </form>
       <p class="muted">Your other devices get logged out when you change it.</p></div>
     ${me.is_admin ? usersCardHTML() : ""}
+    ${me.is_admin && !inSupport() ? supportVisitsHTML() : ""}
+  </div>`;
+}
+
+// Every time Venstock staff looked at this shop's data (read-only, 30 minutes at most, with a reason).
+function supportVisitsHTML() {
+  const visits = state.supportVisits;
+  const when = (v) => (v ? new Date(v).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+  const live = (v) => !v.ended_at && v.expires_at > Date.now();
+  const how = (v) => !v.entered_at ? (live(v) ? "link not used yet" : "link never used")
+    : v.ended_at ? `ended ${when(v.ended_at)}` : live(v) ? `happening now, until ${when(v.expires_at)}` : `ran until ${when(v.expires_at)}`;
+  return `
+  <div class="card"><strong>Venstock support visits</strong>
+    <p class="muted">Each time Venstock staff opened your shop to help (read-only, at most 30 minutes, with a reason).</p>
+    ${!visits ? `<p class="muted">Loading…</p>` : !visits.length ? `<p class="muted">None.</p>` : visits.map((v) => `
+      <div class="row user-row"><span class="grow">${esc(when(v.created_at))} · ${esc(v.staff_email)}<br>
+        <span class="muted">${esc(v.reason)}</span><br>
+        <span class="muted">${esc(how(v))}${v.entered_at ? ` · ${Number(v.requests) || 0} page${Number(v.requests) === 1 ? "" : "s"} read` : ""}</span></span>
+      </div>`).join("")}
   </div>`;
 }
 
@@ -1116,6 +1213,16 @@ function softRender() {
   render();
 }
 
+// An item edit or restock answered 404: the item isn't in this shop's data any more (for example, the shop's data was
+// restored from a backup). Say so plainly, and reload the list so the stale item disappears from this screen.
+async function itemGone(e) {
+  if (e.status !== 404) throw e;
+  await refresh().catch(() => {});
+  const err = new Error("This item isn't in your shop any more, so the change wasn't saved. The item list has been reloaded.");
+  err.status = 404;
+  throw err;
+}
+
 async function run(fn, okMsg) {
   try { await fn(); await refresh(); state.online = true; if (okMsg) toast(okMsg); }
   catch (e) { if (e.status !== 401) alert(errText(e)); }
@@ -1209,10 +1316,34 @@ document.addEventListener("click", (e) => {
   if (d.saverestock !== undefined) {
     const items = Object.entries(state.restock).map(([id, qty]) => ({ id: Number(id), qty })).filter((i) => i.qty);
     if (!items.length) { toast("Enter a quantity for at least one item."); return; }
+    if (items.some((i) => i.qty < 1)) { toast("Restock adds stock: use whole numbers above zero. To lower a count, edit the item."); return; }
     run(async () => {
-      await api("items/restock", { method: "POST", body: { items } });
+      await api("items/restock", { method: "POST", body: { items } }).catch(itemGone);
       state.restock = {}; state.restockSearch = ""; closeModal(false);
     }, `Restocked ${items.length} item${items.length === 1 ? "" : "s"}`);
+    return;
+  }
+
+  if (d.endsupport !== undefined) {
+    api("support/end", { method: "POST", body: {} }).catch(() => {}).finally(() => endedSupport());
+    return;
+  }
+
+  // failed sales
+  if (d.failedcsv !== undefined) { downloadText("failed-sales.csv", VenstockSync.failedCsv(state.failed)); return; }
+  if (d.failretry !== undefined) {
+    const [f] = state.failed.splice(Number(d.failretry), 1);
+    if (f) { state.pending.unshift(f.sale); store.set("pending", state.pending); store.set("failed", state.failed); }
+    paintHeader(); render(); sync();
+    return;
+  }
+  if (d.failremove !== undefined) {
+    const f = state.failed[Number(d.failremove)];
+    if (f && confirm("Remove this sale from this device? It was never recorded, so it will be gone for good. Download the CSV first if you need a record.")) {
+      state.failed.splice(Number(d.failremove), 1);
+      store.set("failed", state.failed);
+      paintHeader(); render();
+    }
     return;
   }
 
@@ -1236,7 +1367,7 @@ document.addEventListener("click", (e) => {
     const f = (n) => row.querySelector(`[data-f="${n}"]`);
     run(() => api(`items/${d.save}`, { method: "PUT", body: {
       name: f("name").value, category: f("category").value, sku: f("sku").value, price_cents: toCents(f("price").value),
-      stock: parseInt(f("stock").value || 0, 10), active: f("active").checked } }), "Saved");
+      stock: parseInt(f("stock").value || 0, 10), active: f("active").checked } }).catch(itemGone), "Saved");
     return;
   }
   if (d.template !== undefined) { downloadText("items-template.csv", "name,category,sku,price,stock\nTee - Medium,Apparel,,5.00,1\n"); return; }

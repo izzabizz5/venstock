@@ -1,11 +1,13 @@
 // All API routes live here: /api/items, /api/shows, /api/sales, /api/settings, /api/export,
 // plus /api/auth (log in / sign up) and /api/users (admins). Everything except /api/auth needs a full login.
-import { authRoutes, userRoutes, currentSession } from "../lib/auth.js";
+import { authRoutes, userRoutes, currentSession } from "./lib/auth.js";
+import { validateRestock } from "./lib/validate.js";
+import { recordSale } from "./lib/sales.js";
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "cache-control": "no-store" }, // vendor data: never kept in a cache
   });
 const fail = (msg, status = 400) => json({ error: msg }, status);
 
@@ -16,6 +18,7 @@ const csvResponse = (rows, filename) =>
   new Response(rows.join("\n"), {
     headers: {
       "content-type": "text/csv",
+      "cache-control": "no-store",
       "content-disposition": `attachment; filename="${filename}"`,
     },
   });
@@ -28,8 +31,12 @@ const DEFAULT_SETTINGS = {
   deals: [],
 };
 
-export async function onRequest({ request, env, params }) {
-  const db = env.DB;
+// Called by src/worker.js for every /api request; route = the path segments after /api.
+// db: the one vendor database the hostname resolved to; tenant: that vendor's registry row ({ id, slug, name,
+// status }). Handlers never receive env, so they can't reach CONTROL or another vendor's binding.
+// support: set only during a Venstock support session ({ admin_email, expires_at }); db is then read-only and the
+// Worker has already refused anything but GET. The vendor's own login cookie is not used at all.
+export async function handleApi({ request, db, tenant, params, support = null }) {
   const url = new URL(request.url);
   const [a, b, c] = params.route || [];
   const m = request.method;
@@ -37,8 +44,17 @@ export async function onRequest({ request, env, params }) {
 
   try {
     // ---------- LOGIN ----------
+    if (support && a === "auth") {
+      if (b === "me" && m === "GET") {
+        return json({ email: `Venstock support (${support.admin_email})`, is_admin: true, stage: "ok",
+          support: { admin_email: support.admin_email, expires_at: support.expires_at } });
+      }
+      return fail("Not available in a support session", 403);
+    }
     if (a === "auth") return await authRoutes({ db, request, b, c, m, body });
-    const sess = await currentSession(db, request);
+    // A support session acts as a read-only admin; it is never a row in this vendor's users or sessions.
+    const sess = support ? { id: 0, email: `Venstock support (${support.admin_email})`, is_admin: 1, mfa_ok: 1 }
+      : await currentSession(db, request);
     if (!sess || !sess.mfa_ok) return fail("Please log in", 401);
     if (a === "users") {
       if (!sess.is_admin) return fail("Only admins can manage who logs in.", 403);
@@ -127,13 +143,22 @@ export async function onRequest({ request, env, params }) {
       }
 
       // Restock: add quantities to several items at once.
+      // Restock: add quantities to several items at once, all or nothing. Ids and quantities must be JSON whole
+      // numbers above zero (no strings, negatives or fractions); one bad entry, or an id that doesn't exist, refuses
+      // the whole request. At most MAX_RESTOCK_ITEMS (src/lib/validate.js), so it is always one atomic D1 batch (D1 also allows at most
+      // 100 bound parameters, which the existence check uses). Lowering a count is done by editing the item.
       if (b === "restock" && m === "POST") {
-        const list = (Array.isArray(body.items) ? body.items : [])
-          .map((i) => ({ id: int(i.id), qty: int(i.qty) }))
-          .filter((i) => i.id && i.qty);
-        if (!list.length) return fail("Nothing to restock");
-        await db.batch(list.map((i) => db.prepare("UPDATE items SET stock = stock + ? WHERE id=?").bind(i.qty, i.id)));
-        return json({ ok: true, count: list.length });
+        const v = validateRestock(body);
+        if (v.error) return fail(v.error);
+        const raw = v.items;
+        const ids = [...new Set(raw.map((i) => i.id))];
+        const { results: found } = await db
+          .prepare(`SELECT id FROM items WHERE id IN (${ids.map(() => "?").join(",")})`)
+          .bind(...ids)
+          .all();
+        if (found.length !== ids.length) return fail("Not found", 404);
+        await db.batch(raw.map((i) => db.prepare("UPDATE items SET stock = stock + ? WHERE id=?").bind(i.qty, i.id)));
+        return json({ ok: true, count: raw.length });
       }
 
       if (b === "export" && m === "GET") {
@@ -152,10 +177,11 @@ export async function onRequest({ request, env, params }) {
       if (b && m === "PUT") {
         const name = str(body.name);
         if (!name) return fail("Name required");
-        await db
+        const r = await db
           .prepare("UPDATE items SET name=?, category=?, sku=?, price_cents=?, stock=?, active=? WHERE id=?")
           .bind(name, str(body.category), str(body.sku), int(body.price_cents), int(body.stock), body.active ? 1 : 0, int(b))
           .run();
+        if (!r.meta.changes) return fail("Not found", 404); // no such item in this vendor's database
         return json({ ok: true });
       }
     }
@@ -222,10 +248,11 @@ export async function onRequest({ request, env, params }) {
       if (id && m === "PUT") {
         const f = fields();
         if (f.error) return fail(f.error);
-        await db
+        const r = await db
           .prepare("UPDATE upcoming_shows SET name=?, show_date=?, start_time=?, end_time=? WHERE id=?")
           .bind(...f.values, id)
           .run();
+        if (!r.meta.changes) return fail("That show was already started or removed", 404);
         return json({ ok: true });
       }
       if (id && m === "DELETE") {
@@ -329,53 +356,10 @@ export async function onRequest({ request, env, params }) {
           .all();
         return json(results);
       }
+      // Upload of one sale rung up on a device: src/lib/sales.js.
       if (!b && m === "POST") {
-        const { client_id, show_id, payment_method, items, created_at } = body;
-        if (!client_id || !["cash", "venmo", "zelle"].includes(payment_method)) return fail("Bad sale");
-        if (!Array.isArray(items) || !items.length) return fail("No items");
-        const dup = await db.prepare("SELECT id FROM sales WHERE client_id=?").bind(client_id).first();
-        if (dup) return json({ id: dup.id, duplicate: true }); // safe to retry
-
-        const lines = items.map((i) => ({
-          item_id: int(i.item_id),
-          name: str(i.name),
-          qty: Math.max(1, int(i.qty, 1)),
-          price_cents: Math.max(0, int(i.price_cents)),
-        }));
-        const subtotal = lines.reduce((t, l) => t + l.qty * l.price_cents, 0);
-        const discount = Math.min(subtotal, Math.max(0, int(body.discount_cents)));
-        const stmts = [
-          db
-            .prepare(
-              `INSERT INTO sales (client_id, show_id, payment_method, total_cents, created_at,
-                                  register, notes, subtotal_cents, discount_cents, discount_label)
-               VALUES (?,?,?,?,?,?,?,?,?,?)`
-            )
-            .bind(
-              client_id,
-              show_id ? int(show_id) : null,
-              payment_method,
-              subtotal - discount,
-              created_at || new Date().toISOString(),
-              str(body.register, 50),
-              str(body.notes, 1000),
-              subtotal,
-              discount,
-              discount ? str(body.discount_label, 100) : ""
-            ),
-        ];
-        for (const l of lines) {
-          stmts.push(
-            db
-              .prepare(
-                "INSERT INTO sale_items (sale_id, item_id, name, qty, price_cents) VALUES ((SELECT id FROM sales WHERE client_id=?),?,?,?,?)"
-              )
-              .bind(client_id, l.item_id, l.name, l.qty, l.price_cents),
-            db.prepare("UPDATE items SET stock = stock - ? WHERE id=?").bind(l.qty, l.item_id)
-          );
-        }
-        await db.batch(stmts);
-        return json({ ok: true });
+        const r = await recordSale(db, body);
+        return json(r.body, r.status);
       }
       if (b && c === "void" && m === "POST") {
         const sale = await db.prepare("SELECT * FROM sales WHERE id=?").bind(int(b)).first();
@@ -427,6 +411,9 @@ export async function onRequest({ request, env, params }) {
 
     return fail("Not found", 404);
   } catch (e) {
-    return fail(String(e.message || e), 500);
+    // Never send error details to the browser (they can include SQL or internals). The log gets what's needed to find
+    // the cause: method, path, vendor and the error. Never the request body (customer notes, passwords).
+    console.error(`venstock: 500 ${m} ${url.pathname} tenant=${tenant?.id ?? "?"}: ${e?.stack || e}`);
+    return fail("Something went wrong", 500);
   }
 }

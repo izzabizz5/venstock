@@ -373,3 +373,12 @@ details summary { cursor: pointer; font-size: 13px; color: var(--blue); }
 .up-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--soft); }
 .up-form label { display: flex; align-items: center; gap: 6px; }
 .notice .sm { margin-left: 6px; }
+
+/* Sales the server refused (400/422): kept on the device until someone deals with them. */
+.card.failed { border-left: 4px solid var(--red); }
+.card.failed .reason { color: var(--red); font-size: 13px; margin-top: 4px; }
+#sync[data-tab] { cursor: pointer; text-decoration: underline; }
+
+/* A Venstock support session (read-only) on a vendor's site. */
+.support-banner { position: sticky; top: 0; z-index: 50; background: var(--warn); color: #fff; padding: 8px 12px; font-size: 14px; text-align: center; }
+.support-banner .sm { margin-left: 8px; }

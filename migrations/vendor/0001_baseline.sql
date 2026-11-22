@@ -1,5 +1,7 @@
--- Fresh install: run this file. Existing database from before registers/discounts:
--- run the files in migrations/ in order instead.
+-- Vendor database baseline: one vendor's shop. Every vendor database gets the files in migrations/vendor/ in order,
+-- applied by scripts/migrate.mjs (wrangler d1 migrations apply). Never edit an applied file; add a new one.
+-- This is the single-vendor schema as of migrations/001-004 (the original show-pos history), plus vendor_identity.
+
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -50,7 +52,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE INDEX IF NOT EXISTS idx_sales_show ON sales(show_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 
--- Logins (same as migrations/003_auth.sql)
+-- Logins. A user belongs to this vendor only (the whole database is the vendor's).
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   email TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -77,11 +79,20 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
--- Upcoming shows (same as migrations/004_upcoming_shows.sql)
 CREATE TABLE IF NOT EXISTS upcoming_shows (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   show_date TEXT NOT NULL,             -- YYYY-MM-DD
   start_time TEXT NOT NULL DEFAULT '', -- HH:MM (24h), optional
   end_time TEXT NOT NULL DEFAULT ''    -- HH:MM (24h), optional
+);
+
+-- Which vendor this database belongs to. Exactly one row, written by scripts/create-tenant.mjs once migrations have
+-- run. The Worker compares it with the control registry before first use, so a binding wired to the wrong
+-- database is refused instead of serving another vendor's data.
+CREATE TABLE IF NOT EXISTS vendor_identity (
+  singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+  tenant_id INTEGER NOT NULL,
+  slug TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );

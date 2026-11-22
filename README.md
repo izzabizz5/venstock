@@ -4,15 +4,13 @@ Point-of-sale and inventory for vendors who sell at markets, cons and pop-up sho
 Take Cash, Venmo and Zelle, track stock across several registers, and see what sold at each show.
 It works offline: sales are saved on the phone and upload automatically when signal returns.
 
-Venstock runs on Cloudflare Pages + Pages Functions + D1, with no build step.
-
-> **Status:** Venstock is being turned into a multi-tenant product, where many vendors share one deployment
-> and each vendor's data is kept separate. That work is in progress. Today the app still serves **one vendor
-> per database**.
+Each vendor gets their own address (`yourshop.<domain>`) and their own database. Venstock staff can't see a shop's
+data except through a support session: read-only, at most 30 minutes, with a written reason, recorded in an audit
+log, and listed in the shop's own Account screen.
 
 ## Using Venstock
 
-Open the site on your phone and use "Add to Home Screen" so it works like an app.
+Open your shop's address on your phone and use "Add to Home Screen" so it works like an app.
 
 - **Sell**: pick your register (top right) once per device. Search or tap a category, then tap items to add them.
   **+ Restock** adds stock without leaving the screen. **Clear Cart** empties the order.
@@ -25,7 +23,7 @@ Open the site on your phone and use "Add to Home Screen" so it works like an app
 - **Shows**: add upcoming shows ahead of time (name, date, start and end time), tap **Start** when you open
   and **End show** when you pack up. On a show day the Sell screen offers a one-tap start. Each show has
   Cash / Venmo / Zelle totals, totals per register, discounts given, best sellers and a CSV download.
-- **Account**: log out, change your password, and (admins) choose who can log in.
+- **Account**: log out, change your password, and (admins) choose who can log in and see Venstock support visits.
 
 Items with sizes or colors: make one item per variant, e.g. "Tee - Medium".
 
@@ -39,7 +37,7 @@ Choose "Add the file's numbers to current stock" to import a restock sheet.
 
 ### Bundle deals
 Deals apply automatically at checkout whenever an order qualifies. A deal matches items **by price**,
-and it repeats if the order qualifies more than once. New vendors start with no deals.
+and it repeats if the order qualifies more than once. New shops start with no deals.
 
 Example: **Buy 3 items priced $5.00 → $2.00 off.**
 Three $5 tees cost $13 instead of $15, and six cost $26 ($4 off).
@@ -47,6 +45,13 @@ Three $5 tees cost $13 instead of $15, and six cost $26 ($4 off).
 ### Multiple registers
 Each phone or tablet picks a register on the Sell screen. Everyone shares the same stock counts
 (they refresh every 15 seconds), and each sale records which register rang it up.
+
+### Offline sales, and sales that couldn't be uploaded
+Sales rung up without signal are kept on the phone ("N to upload") and upload by themselves later. They are
+recorded at the shop's current prices when they reach the server.
+If the server refuses a sale for good (for example, its item was deleted in the meantime), it moves to the top of
+the **Sales** tab with the reason ("N failed" in the header). From there: **Try again**, **Download as CSV** to keep
+a record, or **Remove** it from the phone. Losing signal or a server hiccup never marks a sale as failed.
 
 ### Logins
 Everyone logs in with email + password + a 6-digit code from an authenticator app (two-step login).
@@ -57,46 +62,83 @@ Nobody can sign up without an invite.
 - **Forgot password or lost phone:** an admin taps **New invite** next to their name.
 - Devices stay logged in for 30 days. Sales made offline still upload after logging back in.
 
+### Venstock support
+If you ask Venstock for help, a staff member may open a support session on your shop. While it's open they can
+only look, never change anything, for at most 30 minutes. Admins see every support visit (when, who, why, how
+long) in the Account screen.
+
 ### Backups
-Shows → Download CSV for any show.
+Shows → Download CSV for any show, and Items → Download current items.
+
+## How it works
+
+- **One Cloudflare Worker** (`src/`) serves the app's static files (`public/`) and its API. No build step.
+- **One D1 (SQLite) database per vendor.** A **control** database holds the vendor registry, Venstock staff,
+  support sessions and the audit log.
+- **The vendor comes only from the hostname.** `<slug>.<domain>` → registry → that vendor's own database binding
+  (`DB_T<id>`, derived from the vendor's id) → a check that the database identifies as that vendor. Request handlers
+  receive only that one database; they never see the control database or any other vendor's.
+- **`admin.<domain>`** is the Venstock staff site. Its code receives only the control database.
+- **Offline-first app**: an installable web app with a service worker; sales are queued on the device and
+  uploaded with a unique id, so a retried upload never counts twice.
+- **Logins**: invite-only, PBKDF2 passwords, authenticator codes, `__Host-` cookies. Writes are accepted only as
+  JSON from the same origin.
+
+Adding a vendor creates their database and needs one deploy to connect it; until then their address says "This shop
+is being set up". The details, and the rules every change must follow, are in [CLAUDE.md](CLAUDE.md).
 
 ## Development
 
-Requires Node.js. There is no `package.json`; everything runs through `npx wrangler` and `node`.
-See [CLAUDE.md](CLAUDE.md) for the project rules (local-only development, tenant isolation, migrations).
+Requires Node.js 22.13 or later (`.nvmrc`). Nothing to install: `package.json` only holds the test scripts, and
+wrangler runs through `npx`. Everything below is local; nothing touches Cloudflare.
 
 ### Run it locally
 ```bash
-npx wrangler d1 execute DB --local --file=schema.sql      # first time only: create the local tables
-node scripts/add-admin.mjs you@example.com                # first time only: prints your invite link
-npx wrangler pages dev public                             # then open http://localhost:8788
+node scripts/migrate.mjs --control                                    # first time, and after pulling new control migrations
+node scripts/create-tenant.mjs demo "Demo Shop" you@example.com       # a shop with its own database; prints an invite link
+npx wrangler dev -c .wrangler-generated/local/wrangler.toml --persist-to .wrangler/state
 ```
-Open the invite link, set a password, and scan the QR code with an authenticator app.
-Locked out locally? Run the `add-admin.mjs` command again for a fresh invite.
+Open the invite link (`http://demo.localhost:8788/#invite=…`), set a password, and scan the QR code with an
+authenticator app. Plain `http://localhost:8788` answers "Not found": only a shop's own address serves the app.
 
-`scripts/add-admin.mjs` uses the local database unless you pass `--remote`. With `--remote`, it reads
-`database_name` from `wrangler.toml` and refuses to run unless it is exactly `venstock-dev`. Either way it
-prints which database it is about to touch.
-
-### Database changes
-`schema.sql` is the full schema for a fresh database. Changes go in a new numbered file in `migrations/`
-(next number after the highest one), and `schema.sql` is updated to match. Apply one locally with:
-```bash
-npx wrangler d1 execute DB --local --file=migrations/NNN_name.sql
-```
-Never edit a migration that already exists.
+- Locked out: `node scripts/add-admin.mjs --tenant demo you@example.com` prints a fresh invite.
+- After creating another shop, restart `wrangler dev` (it connects databases when it starts).
+- After pulling new migrations: `node scripts/migrate.mjs`.
+- Staff site: `node scripts/create-platform-admin.mjs you@example.com`, then open the printed
+  `http://admin.localhost:8788/#invite=…` link.
 
 ### Tests
-There are no automated tests yet.
+```bash
+npm run test:fast                   # unit tests: no wrangler, no databases, about a second
+npm run test:full                   # everything, including real local servers and databases (about a minute)
+node --test tests/<file>.test.mjs   # one file, while working on it
+```
+Every test uses its own throwaway local databases. Use `test:fast` for quick checks while editing; run `test:full`
+before every commit. Checks that need a real browser are listed in `tests/MANUAL.md`.
 
-### Deploying
-Deployment for Venstock isn't set up yet. `wrangler.toml` has placeholder database values. The only remote
-database Venstock may use is `venstock-dev`.
+### Database changes
+Schema changes are new numbered files in `migrations/vendor/` (every shop's database) or `migrations/control/`.
+They must be backward compatible (the running code sees the new schema before the new code is deployed). Record each
+new file's checksum, then apply:
+```bash
+node scripts/migrations-manifest.mjs --update   # commit checksums.json with the migration
+node scripts/migrate.mjs                        # control, then every shop's database (local)
+```
+See `migrations/README.md`.
+
+### Deploying and operating
+Not deployed yet. [docs/before-first-vendor.md](docs/before-first-vendor.md) is the launch checklist (domain,
+Cloudflare setup, first release, drills). [docs/runbook.md](docs/runbook.md) covers the work per vendor: onboarding,
+support sessions, suspending, exporting and deleting.
 
 ### Project layout
-- `public/`: the app (installable web app): `index.html`, `app.js` (every screen plus the offline sale queue),
-  `style.css`, `sw.js` (offline cache), `manifest.webmanifest`, `vendor/qrcode.js`.
-- `functions/api/[[route]].js`: the API: items, shows, sales, settings, CSV export.
-- `functions/lib/auth.js`: invites, passwords, two-step login, sessions, and the admin user list.
-- `schema.sql` and `migrations/`: the database schema.
-- `scripts/add-admin.mjs`: creates or resets an admin and prints an invite code (local by default).
+- `src/worker.js`: the entry point: hostname → vendor (or the staff site), request checks, then the API or a file.
+- `src/api.js` and `src/lib/`: the shop API (items, shows, sales, settings, users), logins, the resolver, the
+  control-database code, sale recording, validation, and the read-only database used in support sessions.
+- `src/platform.js`: the staff API at `admin.<domain>`.
+- `public/`: the shop app (`index.html`, `app.js`, `sync.js`, `sw.js`, `style.css`) and the staff page (`admin.html`,
+  `admin.js`).
+- `scripts/`: create, suspend and delete shops, add staff, run migrations, build the deploy config, prepare a release.
+- `migrations/`: `control/` and `vendor/` migrations with checksums (`001`–`004`: history of the original app).
+- `tests/`: automated tests (`node --test`) and `tests/MANUAL.md`.
+- `docs/`: the launch checklist and the runbook.
