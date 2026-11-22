@@ -1,0 +1,37 @@
+/* Shared by the two direction previews (design/preview/a.html, b.html). Preview-only: not loaded by the app.
+   Serve the repo root locally so the fonts load (browsers block fonts from file://):
+     python3 -m http.server 8000 --bind 127.0.0.1   then open http://127.0.0.1:8000/design/preview/a.html */
+@font-face {
+  font-family: "Archivo";
+  src: url("../../public/fonts/archivo.woff2") format("woff2");
+  font-weight: 400 900; font-stretch: 100% 125%; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("../../public/fonts/fraunces.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+*, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+html, body { margin: 0; }
+body { -webkit-text-size-adjust: 100%; }
+button, input, select { font: inherit; color: inherit; }
+/* browsers reset these on buttons; labels set them on the parent */
+button { text-transform: inherit; letter-spacing: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* preview chrome: what each block shows, and the light/dark switch */
+.pv-label {
+  margin: 0; padding: 10px 24px; font: 700 12px/1 "Archivo", Arial, sans-serif; font-stretch: 125%;
+  letter-spacing: .14em; text-transform: uppercase; background: var(--pv-bg); color: var(--pv-fg);
+}
+.pv-switch {
+  position: fixed; right: 16px; bottom: 16px; z-index: 50; min-height: 48px; padding: 0 20px;
+  border: 2px solid var(--pv-fg); background: var(--pv-bg); color: var(--pv-fg);
+  font: 700 13px/1 "Archivo", Arial, sans-serif; font-stretch: 125%; letter-spacing: .12em; text-transform: uppercase;
+}
+.screen { border-bottom: 8px solid var(--pv-bg); }
+.phone { width: 375px; max-width: 100%; margin: 0 auto; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

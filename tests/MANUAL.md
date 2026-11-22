@@ -86,17 +86,47 @@ they are (tests/sync.unit.test.mjs covers the rules; this checks them in a real 
    (`http://admin.localhost:8788/#invite=…`). Set a password, scan the QR code, enter the 6-digit code. Expected:
    the Vendors list with `demo` (and `acme` if created). Cookies for `admin.localhost`: `__Host-pos_platform`, no
    Domain.
-2. Press "Support session" next to `demo`, type a reason. Expected: a "Support link for demo" card. Press "Open
-   support session". Expected: a new tab at `http://demo.localhost:8788/` with an orange banner "Venstock support
-   session: read-only, ends at …", showing demo's items and sales.
+2. Press "Support session" next to `demo`, type a reason. Expected: a "Support link for demo" card with a countdown
+   ("58 s left", going down each second). Right-click "Open support session" and copy the link (for step 6), then
+   press it. Expected: a new tab at `http://demo.localhost:8788/` with an orange banner "Venstock support
+   session: read-only, ends at …", showing demo's items and sales; the admin card now says the link was opened and
+   works only once (no button).
+   Also: start another session for `demo` and wait out the countdown. Expected: at 0 the button is replaced by "Link
+   expired: … Start a new support session."; the session still shows in the list (it expires on its own).
 3. In that tab, try to ring up a sale and to edit an item. Expected: "read-only support session" messages; nothing
    changes (check in a normal demo login).
 4. Reload the admin page. Expected: the session listed as active; the audit log shows support.start, support.enter
    and support.request lines.
 5. Press "End now" in the banner. Expected: the login screen. The admin page shows the session as "ended
    (vendor-host)".
-6. Open the same support link again. Expected: an alert that the link is invalid, already used or expired.
+6. Paste the link copied in step 2 into a new tab. Expected: an alert that the link is invalid, already used or expired.
 7. In a normal tab, log in at `http://demo.localhost:8788/` as demo's owner. Expected: no banner, everything normal.
+
+## Look and feel (docs/design.md), on a phone in sunlight if possible
+Fill demo first: `node scripts/seed-demo.mjs --replace` (local only; wipes demo's items, shows, sales and settings).
+1. Logged out: a deep-blue field with the stacked wordmark beside (desktop) or above (phone) the form. The header
+   shows only the Dark/Light button.
+2. Sell screen, desktop: sky header band, cream item tiles with sage gaps, deep-blue order panel. Tap items: each
+   fills sky blue with a count in its corner. The total is bold, a little bigger than the subtotal; Complete sale is
+   orange. On an iPad (768 and 1032 wide) the header fits on one line and the show name isn't cut off; on a phone
+   every category is visible (they wrap onto a second row).
+3. Phone (or a 390px window): the tabs sit along the bottom; a deep-blue bar above them shows the item count and
+   total. Tap it: the order slides up; the × closes it. Every button is easy to hit with a thumb.
+4. Checkout: payment is three joined buttons (the chosen one dark); Exact / $20 / $50 fill the cash box; Change due
+   is large. Confirm sale is orange with a dark edge.
+   Items list: every other row has a slightly darker background.
+5. Press Dark: the whole app turns dark navy, text stays readable, the button now says Light; reload keeps it.
+   The browser's address bar colour follows (Android Chrome).
+6. With "reduce motion" on in the OS, the order sheet and toast appear without sliding.
+7. Nothing anywhere has rounded corners or soft shadows; no emoji appear as icons.
+8. Offline (developer tools → Network → Offline), reload: the fonts and colours are the same as online (they are
+   in the app-shell cache).
+9. Sales with a failed sale (see "A sale the server refuses…" above): a brick-red block says what happened, each
+   failed sale has a brick edge and its reason in words; the header shows "1 failed" in a dark block.
+10. In a support session (see the platform admin section): a mustard banner with "End now" across the top; scroll
+    the Sell screen on a laptop: the banner and the header both stay, the header below the banner, nothing hidden.
+11. The staff admin page (`admin.localhost`) has a dark ink header, never the sky one, so it can't be mistaken for a
+    shop. A new support link shows a mustard card with a large countdown and an orange Open button.
 
 ## Results
 | Check | Browser and version | Date | Result |

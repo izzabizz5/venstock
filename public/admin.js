@@ -66,11 +66,34 @@ async function load() {
   data = { vendors, support, audit };
 }
 
+// The one-time support link works for link_seconds after the server made it. Count down from when this page got
+// it (not from link_expires_at, which is in the server's clock), minus a little for the trip to the vendor's host.
+const LINK_MARGIN_MS = 2000;
+let linkTimer = null;
+const linkSecondsLeft = () => Math.max(0, Math.ceil((lastLink.deadline - Date.now()) / 1000));
+
+function linkCard() {
+  if (!lastLink) return "";
+  const head = `<strong>Support link for ${esc(lastLink.slug)}</strong>`;
+  if (lastLink.opened) return `${head}<p class="muted">Opened in a new tab. The link works only once: to look again, start a new support session.</p>`;
+  const left = linkSecondsLeft();
+  if (!left) return `${head}<p class="warn">Link expired: it must be opened within ${esc(lastLink.link_seconds)} seconds. Start a new support session.</p>`;
+  return `${head}<p class="muted">Open it now: <strong class="warn">${left} s left</strong>. It works once, and opens ${esc(lastLink.slug)}'s own site, read-only, until ${esc(when(lastLink.expires_at))}.</p>
+    <a href="${esc(lastLink.url)}" target="_blank" rel="noopener" data-openlink><button class="sm">Open support session</button></a>`;
+}
+
+// Redraws only the link card (once a second while the link is usable), never the whole page.
+function paintLinkCard() {
+  const el = document.getElementById("supportLink");
+  if (el) el.innerHTML = linkCard();
+  const live = lastLink && !lastLink.opened && linkSecondsLeft() > 0;
+  if (live && !linkTimer) linkTimer = setInterval(paintLinkCard, 1000);
+  if (!live && linkTimer) { clearInterval(linkTimer); linkTimer = null; }
+}
+
 function dashboard() {
   $("#who").textContent = me.email;
-  const link = lastLink ? `<div class="card"><strong>Support link for ${esc(lastLink.slug)}</strong>
-    <p class="muted">Open it within a minute (by ${esc(new Date(lastLink.link_expires_at).toLocaleTimeString())}); it works once. It opens ${esc(lastLink.slug)}'s own site, read-only, until ${esc(when(lastLink.expires_at))}.</p>
-    <a href="${esc(lastLink.url)}" target="_blank" rel="noopener"><button class="sm">Open support session</button></a></div>` : "";
+  const link = lastLink ? `<div class="card" id="supportLink">${linkCard()}</div>` : "";
   view(`<div class="page">${note()}${link}
     <h2>Vendors</h2>
     ${data.vendors.map((v) => `<div class="card"><div class="row"><span class="grow"><strong>${esc(v.slug)}</strong> · ${esc(v.name)}</span>
@@ -83,6 +106,7 @@ function dashboard() {
     <h2>Audit log</h2>
     ${data.audit.map((l) => `<div class="muted">${esc(when(l.at))} · ${esc(l.action)} · ${esc(l.admin_email || "")} · ${esc(l.slug || "")} · ${esc(l.detail)}</div>`).join("") || `<p class="muted">Empty.</p>`}
     <p><button class="link" data-logout>Log out</button></p></div>`);
+  paintLinkCard();
 }
 
 async function render() {
@@ -93,6 +117,11 @@ async function render() {
 }
 
 document.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-openlink]")) {
+    // Let the browser open the link first; then the card says it was used (it works only once).
+    setTimeout(() => { if (lastLink) { lastLink.opened = true; paintLinkCard(); } }, 0);
+    return;
+  }
   const t = e.target.closest("button");
   if (!t) return;
   if (t.dataset.support) {
@@ -100,7 +129,7 @@ document.addEventListener("click", async (e) => {
     if (!reason) return;
     try {
       const r = await api("platform/support", { method: "POST", body: { slug: t.dataset.support, reason } });
-      lastLink = { ...r, slug: t.dataset.support }; flash = "";
+      lastLink = { ...r, slug: t.dataset.support, deadline: Date.now() + r.link_seconds * 1000 - LINK_MARGIN_MS }; flash = "";
     } catch (err) { flash = err.message; }
     render();
   } else if (t.dataset.end) {
@@ -108,7 +137,7 @@ document.addEventListener("click", async (e) => {
     render();
   } else if (t.dataset.logout !== undefined) {
     await api("auth/logout", { method: "POST", body: {} }).catch(() => {});
-    me = null; lastLink = null; render();
+    me = null; lastLink = null; paintLinkCard(); render();
   }
 });
 

@@ -6,3 +6,6 @@ node_modules/
 *.zip
 .DS_Store
 .wrangler-generated/
+
+# Reference artwork (someone else's; never committed)
+design/reference/

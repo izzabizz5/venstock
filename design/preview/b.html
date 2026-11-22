@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Venstock B: Ledger</title>
+<link rel="stylesheet" href="preview.css">
+<style>
+/* ---------- Direction B, "Ledger": cream paper, ink, thick rules instead of boxes; colour only where money is ---- */
+:root {
+  --cream: #F6F4D6; --paper: #FBFAEC; --ink: #10263D; --muted: #4A5866; --deep: #17609B; --sky: #8CB9CE;
+  --mustard: #C6B44E; --orange: #F2A24B; --sage: #D8DDD5; --brick: #A3341C;
+  --page: var(--cream); --text: var(--ink); --text-2: var(--muted); --rule: var(--ink); --hair: var(--sage);
+  --money: var(--deep); --on-money: var(--cream); --select: var(--sky);
+  --action: var(--orange); --on-action: var(--ink); --edge: var(--ink);
+  --flag: var(--mustard); --danger: var(--brick); --focus: var(--ink);
+  --pv-bg: var(--ink); --pv-fg: var(--cream);
+}
+:root[data-theme="dark"] {
+  --page: #0D1B2A; --text: #F6F4D6; --text-2: #A9B8C6; --rule: #F6F4D6; --hair: #2C4A69;
+  --money: #17609B; --on-money: #F6F4D6; --select: #132B44;
+  --action: #F2A24B; --on-action: #10263D; --edge: #F6F4D6;
+  --flag: #C6B44E; --danger: #F08A6C; --focus: #F6F4D6;
+  --pv-bg: #F6F4D6; --pv-fg: #10263D;
+}
+body { background: var(--page); color: var(--text); font: 400 16px/1.45 "Archivo", Arial, sans-serif; word-spacing: .05em; }
+.label { font-weight: 700; font-stretch: 125%; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+.num { font-variant-numeric: tabular-nums lining-nums; }
+.serif { font-family: "Fraunces", Georgia, serif; font-weight: 700; }
+
+/* header: paper, a 6px rule under it, the current tab marked by a deep-blue bar */
+.bar { display: flex; align-items: stretch; gap: 0; border-bottom: 6px solid var(--rule); }
+.mark { display: flex; align-items: center; padding: 0 24px 0 20px; font: 900 26px/1 "Archivo", sans-serif; font-stretch: 125%; letter-spacing: -.03em; }
+.show { display: flex; align-items: center; gap: 10px; padding: 0 16px; min-width: 0; color: var(--text-2); }
+.show b { font: 700 16px/1.1 "Fraunces", Georgia, serif; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tabs { display: flex; margin-left: auto; }
+.tabs button { min-height: 60px; padding: 0 16px; border: 0; border-bottom: 6px solid transparent; margin-bottom: -6px; background: none; color: var(--text-2); }
+.tabs button.on { color: var(--text); border-bottom-color: var(--money); }
+.sync { display: flex; align-items: center; padding: 0 16px; color: var(--text-2); }
+.theme { min-height: 60px; padding: 0 18px; border: 0; background: none; color: var(--text); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px; }
+
+/* login: the word set huge, hanging off the left edge; the form in a narrow ruled column; one deep block */
+.login { display: grid; grid-template-columns: 1fr minmax(320px, 420px) 22%; grid-template-rows: 1fr auto; grid-template-areas: ". form side" "word word side"; min-height: 660px; overflow: hidden; }
+.login .word { grid-area: word; align-self: end; margin: 0 0 20px -0.06em; font: 900 clamp(64px, 12.5vw, 172px)/.8 "Archivo", sans-serif; font-stretch: 125%; letter-spacing: -.05em; white-space: nowrap; }
+.login form { grid-area: form; align-self: center; padding: 40px 32px; border-top: 6px solid var(--rule); }
+.login h1 { margin: 0 0 4px; font: 700 30px/1.1 "Fraunces", Georgia, serif; }
+.login .sub { margin: 0 0 28px; color: var(--text-2); }
+.login .side { grid-area: side; background: var(--money); color: var(--on-money); padding: 40px 28px; display: flex; align-items: flex-end; }
+.login .side p { margin: 0; font: 700 22px/1.25 "Fraunces", Georgia, serif; }
+.field { display: block; margin-bottom: 22px; }
+.field span { display: block; margin-bottom: 6px; }
+.input { width: 100%; height: 52px; padding: 0 2px; border: 0; border-bottom: 3px solid var(--rule); background: transparent; font-size: 18px; }
+.input:focus-visible { outline-offset: 4px; }
+.input.code { font-size: 28px; letter-spacing: .35em; font-variant-numeric: tabular-nums; }
+.go { width: 100%; min-height: 56px; margin-top: 8px; border: 3px solid var(--edge); background: var(--action); color: var(--on-action); font-size: 14px; }
+.textlink { min-height: 48px; padding: 12px 0; border: 0; background: none; color: var(--text); text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+
+/* register: category rail | item ledger | order with the money block */
+.pos { display: grid; grid-template-columns: 180px minmax(0, 1fr) 360px; min-height: 760px; }
+.rail { padding: 20px 0; border-right: 2px solid var(--rule); }
+.rail button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 0 20px; border: 0; background: none; color: var(--text-2); text-align: left; }
+.rail button.on { color: var(--text); }
+.rail button.on::before { content: ""; width: 12px; height: 12px; background: var(--money); }
+.rail .restock { margin-top: 24px; color: var(--text); text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px; }
+.ledger { padding: 20px 28px; min-width: 0; }
+.search { margin-bottom: 8px; }
+.items { border-top: 6px solid var(--rule); }
+.item { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto 84px; align-items: center; gap: 16px; width: 100%; min-height: 64px; padding: 0 4px; border: 0; border-bottom: 2px solid var(--hair); background: none; color: var(--text); text-align: left; }
+.item .cat { color: var(--text-2); font-size: 11px; }
+.item .st { color: var(--text-2); font-size: 14px; text-align: right; }
+.item .pr { font: 800 20px/1 "Archivo", sans-serif; font-stretch: 112%; text-align: right; }
+.item.on { background: var(--select); }
+.item.on .nm::after { content: attr(data-qty); display: inline-grid; place-items: center; min-width: 28px; height: 28px; margin-left: 10px; padding: 0 6px; background: var(--rule); color: var(--page); font-weight: 800; font-size: 14px; font-variant-numeric: tabular-nums; }
+.item.out { color: var(--text-2); }
+.item.out .st { color: var(--danger); font-weight: 700; }
+
+.order { display: flex; flex-direction: column; border-left: 6px solid var(--rule); }
+.order-head { display: flex; justify-content: space-between; align-items: end; padding: 20px 24px 12px; }
+.order-head h2 { margin: 0; font: 700 26px/1 "Fraunces", Georgia, serif; }
+.order select { min-height: 48px; padding: 0 8px; border: 0; border-bottom: 3px solid var(--rule); background: transparent; }
+.lines { flex: 1; padding: 0 24px; }
+.line { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 0; border-bottom: 2px solid var(--hair); }
+.line small { color: var(--text-2); }
+.line .amt { text-align: right; font-weight: 700; }
+.step { grid-column: 1 / -1; display: flex; align-items: center; }
+.step button { width: 48px; height: 48px; border: 2px solid var(--rule); background: none; color: var(--text); font-size: 22px; font-weight: 700; }
+.step button + b + button { border-left-width: 2px; }
+.step b { width: 44px; text-align: center; }
+.step .rm { margin-left: auto; width: auto; padding: 0 12px; border: 0; font-size: 14px; text-decoration: underline; text-underline-offset: 4px; }
+.deal { display: flex; justify-content: space-between; margin: 12px 24px 0; padding-left: 12px; border-left: 6px solid var(--flag); font-weight: 600; }
+.money { margin-top: 20px; padding: 20px 24px 24px; background: var(--money); color: var(--on-money); }
+.money .row { display: flex; justify-content: space-between; padding: 2px 0; }
+.money .total { display: block; margin-top: 12px; font: 900 64px/1 "Archivo", sans-serif; font-stretch: 125%; letter-spacing: -.03em; }
+.complete { width: 100%; min-height: 72px; margin-top: 18px; border: 3px solid var(--ink); background: var(--action); color: var(--on-action); font-size: 15px; }
+.clear { min-height: 48px; margin-top: 6px; border: 0; background: none; color: inherit; text-decoration: underline; text-underline-offset: 4px; }
+
+/* items: one long ledger */
+.page { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 0 40px; padding: 40px 24px 64px; max-width: 1180px; }
+.page aside h1 { margin: 0 0 18px; font: 900 40px/1 "Archivo", sans-serif; font-stretch: 125%; letter-spacing: -.03em; }
+.page aside .stack { display: flex; flex-direction: column; gap: 0; }
+.btn { min-height: 52px; padding: 0 4px; border: 0; border-bottom: 2px solid var(--hair); background: none; color: var(--text); text-align: left; }
+.btn.primary { border: 3px solid var(--edge); background: var(--action); color: var(--on-action); padding: 0 16px; margin-bottom: 8px; }
+.dealnote { margin-top: 28px; padding-left: 12px; border-left: 6px solid var(--flag); }
+.dealnote h2 { margin: 0 0 4px; font: 700 18px/1.2 "Fraunces", Georgia, serif; }
+.dealnote p { margin: 0; color: var(--text-2); font-size: 15px; }
+.group { margin-bottom: 28px; }
+.group h2 { display: flex; justify-content: space-between; align-items: baseline; margin: 0; padding-bottom: 6px; border-bottom: 6px solid var(--rule); font: 700 24px/1.1 "Fraunces", Georgia, serif; }
+.group h2 span { font-family: "Archivo", sans-serif; }
+.row-i { display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px 90px; align-items: center; min-height: 56px; border-bottom: 2px solid var(--hair); }
+.row-i .r { text-align: right; }
+.row-i .sku { color: var(--text-2); }
+.row-i .low { color: var(--danger); font-weight: 700; }
+.row-i.off { color: var(--text-2); }
+
+@media (max-width: 860px) {
+  .bar { flex-wrap: wrap; }
+  .show, .sync { display: none; }
+  .tabs { order: 3; width: 100%; overflow-x: auto; margin-left: 0; }
+  .theme { margin-left: auto; }
+  .login { grid-template-columns: minmax(0, 1fr); grid-template-areas: "word" "form" "side"; grid-template-rows: auto; }
+  .login .word { margin: 24px 0 0 -0.04em; font-size: 17vw; }
+  .login form { padding: 28px 16px; }
+  .login .side { padding: 24px 16px; }
+  .pos { grid-template-columns: 1fr; }
+  .rail { display: flex; overflow-x: auto; padding: 0; border-right: 0; border-bottom: 2px solid var(--rule); }
+  .rail button { width: auto; white-space: nowrap; }
+  .rail .restock { margin: 0 0 0 auto; }
+  .ledger { padding: 12px 16px; }
+  .item { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; }
+  .item .cat, .item .st { grid-column: 1; text-align: left; }
+  .item .pr { grid-row: 1 / span 3; grid-column: 2; }
+  .order { border-left: 0; border-top: 6px solid var(--rule); }
+  .page { grid-template-columns: minmax(0, 1fr); gap: 32px; padding: 28px 16px 48px; }
+  .row-i { grid-template-columns: minmax(0, 1fr) 80px 70px; }
+  .row-i .sku { display: none; }
+}
+</style>
+</head>
+<body>
+
+<p class="pv-label">Direction B · Ledger · login</p>
+<section class="screen">
+  <div class="login">
+    <p class="word" aria-hidden="true">venstock</p>
+    <form onsubmit="return false">
+      <h1>Log in to Demo Shop</h1>
+      <p class="sub">demo.venstock.org</p>
+      <label class="field"><span class="label">Email</span><input class="input" type="email" value="owner@demo.test"></label>
+      <label class="field"><span class="label">Password</span><input class="input" type="password" value="password-here"></label>
+      <label class="field"><span class="label">6-digit code</span><input class="input code" inputmode="numeric" placeholder="123456"></label>
+      <button class="go label">Log in</button>
+      <button class="textlink" type="button">Forgot your password?</button>
+    </form>
+    <div class="side"><p>Cash, Venmo and Zelle at the table. Keeps selling when the signal drops.</p></div>
+  </div>
+</section>
+
+<p class="pv-label">Direction B · Ledger · sale register</p>
+<section class="screen">
+  <header class="bar">
+    <span class="mark">venstock</span>
+    <span class="show"><span class="label">Running</span><b>Harbor Street Makers Market</b></span>
+    <nav class="tabs label"><button class="on">Sell</button><button>Sales</button><button>Items</button><button>Shows</button><button>Account</button></nav>
+    <span class="sync label">Synced</span>
+    <button class="theme label" data-toggle>Dark</button>
+  </header>
+  <div class="pos">
+    <nav class="rail label">
+      <button class="on">All</button><button>Prints</button><button>Stickers</button><button>Pins</button><button>Apparel</button><button>Paper</button>
+      <button class="restock">Restock</button>
+    </nav>
+    <div class="ledger">
+      <label class="field search"><span class="label sr">Search</span><input class="input" placeholder="Search items or SKU"></label>
+      <div class="items">
+        <button class="item on"><span class="cat label">Prints</span><span class="nm" data-qty="1">Harbor at Dusk, 8x10 print</span><span class="st num">16 left</span><span class="pr num">$25</span></button>
+        <button class="item"><span class="cat label">Prints</span><span class="nm">Harbor at Dusk, 11x14 print</span><span class="st num">8 left</span><span class="pr num">$40</span></button>
+        <button class="item"><span class="cat label">Prints</span><span class="nm">Lighthouse Study, 5x7 print</span><span class="st num">3 left</span><span class="pr num">$15</span></button>
+        <button class="item out"><span class="cat label">Prints</span><span class="nm">Tide Chart, 11x14 print</span><span class="st">Sold out</span><span class="pr num">$40</span></button>
+        <button class="item on"><span class="cat label">Stickers</span><span class="nm" data-qty="3">Gull sticker</span><span class="st num">51 left</span><span class="pr num">$4</span></button>
+        <button class="item"><span class="cat label">Stickers</span><span class="nm">Sticker sheet (6)</span><span class="st num">18 left</span><span class="pr num">$12</span></button>
+        <button class="item"><span class="cat label">Pins</span><span class="nm">Anchor enamel pin</span><span class="st num">21 left</span><span class="pr num">$12</span></button>
+        <button class="item on"><span class="cat label">Apparel</span><span class="nm" data-qty="1">Harbor tee, M</span><span class="st num">9 left</span><span class="pr num">$32</span></button>
+        <button class="item"><span class="cat label">Apparel</span><span class="nm">Canvas tote</span><span class="st num">14 left</span><span class="pr num">$22</span></button>
+      </div>
+    </div>
+    <aside class="order">
+      <div class="order-head"><h2>This sale</h2><select class="label"><option>Register 1</option></select></div>
+      <div class="lines">
+        <div class="line"><span>Harbor at Dusk, 8x10 print<br><small class="num">$25.00 each</small></span><span class="amt num">$25.00</span>
+          <span class="step"><button aria-label="One less">−</button><b class="num">1</b><button aria-label="One more">+</button><button class="rm">Remove</button></span></div>
+        <div class="line"><span>Gull sticker<br><small class="num">$4.00 each</small></span><span class="amt num">$12.00</span>
+          <span class="step"><button aria-label="One less">−</button><b class="num">3</b><button aria-label="One more">+</button><button class="rm">Remove</button></span></div>
+        <div class="line"><span>Harbor tee, M<br><small class="num">$32.00 each</small></span><span class="amt num">$32.00</span>
+          <span class="step"><button aria-label="One less">−</button><b class="num">1</b><button aria-label="One more">+</button><button class="rm">Remove</button></span></div>
+      </div>
+      <div class="deal"><span>Deal: 3 × $4 items</span><span class="num">−$2.00</span></div>
+      <div class="money">
+        <div class="row"><span>Subtotal</span><span class="num">$69.00</span></div>
+        <div class="row"><span>Deals</span><span class="num">−$2.00</span></div>
+        <span class="label">Total</span>
+        <span class="total num">$67.00</span>
+        <button class="complete label">Complete sale</button>
+        <button class="clear">Clear this sale</button>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<p class="pv-label">Direction B · Ledger · items</p>
+<section class="screen">
+  <div class="page">
+    <aside>
+      <h1>Items</h1>
+      <div class="stack label"><button class="btn primary">Add item</button><button class="btn">Import CSV</button><button class="btn">Export</button></div>
+      <div class="dealnote"><h2>Bundle deal</h2><p class="num">Buy 3 items priced $4, get $2 off. Repeats.</p></div>
+    </aside>
+    <div>
+      <section class="group">
+        <h2>Prints <span class="label">6 items</span></h2>
+        <div class="row-i num"><span>Harbor at Dusk, 8x10 print</span><span class="sku">PR-001</span><span class="r">$25.00</span><span class="r">16</span></div>
+        <div class="row-i num"><span>Lighthouse Study, 5x7 print</span><span class="sku">PR-005</span><span class="r">$15.00</span><span class="r low">3 left</span></div>
+        <div class="row-i num"><span>Tide Chart, 11x14 print</span><span class="sku">PR-006</span><span class="r">$40.00</span><span class="r low">Sold out</span></div>
+      </section>
+      <section class="group">
+        <h2>Stickers <span class="label">5 items</span></h2>
+        <div class="row-i num"><span>Gull sticker</span><span class="sku">ST-001</span><span class="r">$4.00</span><span class="r">51</span></div>
+        <div class="row-i num"><span>Rope knot sticker</span><span class="sku">ST-004</span><span class="r">$4.00</span><span class="r low">6 left</span></div>
+      </section>
+      <section class="group">
+        <h2>Paper <span class="label">4 items</span></h2>
+        <div class="row-i num"><span>Postcard set (5)</span><span class="sku">PC-001</span><span class="r">$10.00</span><span class="r">23</span></div>
+        <div class="row-i num off"><span>Winter calendar (retired) · hidden</span><span class="sku">CA-001</span><span class="r">$18.00</span><span class="r">4</span></div>
+      </section>
+    </div>
+  </div>
+</section>
+
+<button class="pv-switch" data-toggle>Dark</button>
+<script>
+  // Preview only: flips light/dark so both can be judged.
+  // Open with #dark at the end of the address to start in dark mode.
+  const setTheme = (dark) => {
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.querySelectorAll("[data-toggle]").forEach((b) => (b.textContent = dark ? "Light" : "Dark"));
+  };
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-toggle]")) setTheme(document.documentElement.dataset.theme !== "dark");
+  });
+  setTheme(location.hash === "#dark");
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@
   "short_name": "Venstock",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#F6F4D6",
+  "theme_color": "#8CB9CE",
   "icons": []
 }

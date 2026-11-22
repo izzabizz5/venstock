@@ -1,0 +1,159 @@
+/* Venstock design tokens: the ONLY place colours, type, spacing and rule widths are defined (docs/design.md).
+   style.css uses these through var(); it never writes a colour itself (tests/design.unit.test.mjs).
+
+   Contrast: every pair below is checked in BOTH light and dark by tests/contrast.unit.test.mjs.
+   body = 4.5:1 (normal text), large = 3:1 (24px+, or 19px+ bold), ui = 3:1 (edges of controls, WCAG 1.4.11).
+   A colour token used as a text colour in style.css must appear on the left of at least one pair.
+   @pair --text on --page body
+   @pair --text-2 on --page body
+   @pair --accent-text on --page body
+   @pair --text on --surface body
+   @pair --text-2 on --surface body
+   @pair --on-band on --band body
+   @pair --on-panel on --panel body
+   @pair --text on --tile body
+   @pair --text-2 on --tile body
+   @pair --text on --tile-on body
+   @pair --text on --stripe body
+   @pair --text-2 on --stripe body
+   @pair --danger on --stripe body
+   @pair --danger on --page body
+   @pair --danger on --tile body
+   @pair --danger on --surface body
+   @pair --on-mark on --mark body
+   @pair --on-action on --action body
+   @pair --invert-fg on --invert-bg body
+   @pair --on-alert on --alert-bg body
+   @pair --on-panel on --panel-2 body
+   @pair --edge on --page ui
+   @pair --edge on --surface ui
+   @pair --action on --panel ui
+   @pair --on-panel on --panel ui
+   @pair --mark on --panel ui
+   @pair --focus on --page ui
+   @pair --focus-on-panel on --panel ui
+*/
+
+@font-face {
+  font-family: "Archivo";
+  src: url("/fonts/archivo.woff2") format("woff2");
+  font-weight: 400 900; font-stretch: 100% 125%; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces.woff2") format("woff2");
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+:root {
+  color-scheme: light;
+
+  /* palette: sampled from the mood board, plus derived ink / muted / brick and the dark grounds */
+  --c-sky: #8CB9CE;
+  --c-cream: #F6F4D6;
+  --c-mustard: #C6B44E;
+  --c-deep: #17609B;
+  --c-mid: #4A87D6;      /* large type / decoration only: 3.3:1 on cream */
+  --c-orange: #F2A24B;   /* the one primary action; never text */
+  --c-sage: #D8DDD5;
+  --c-ink: #10263D;
+  --c-muted: #4A5866;
+  --c-brick: #A3341C;
+  --c-ground: #0D1B2A;
+  --c-ground-2: #132B44;
+  --c-line-dark: #2C4A69;
+  --c-muted-dark: #A9B8C6;
+  --c-brick-dark: #F08A6C;
+  --c-white: #FFFFFF;    /* QR codes only: they need dark-on-white in both themes */
+
+  /* roles (light) */
+  --page: var(--c-cream);
+  --surface: var(--c-cream);          /* popups and sheets */
+  --text: var(--c-ink);
+  --text-2: var(--c-muted);
+  --accent-text: var(--c-deep);        /* coloured text accents (labels, numerals) */
+  --band: var(--c-sky);               /* the header field */
+  --on-band: var(--c-ink);
+  --panel: var(--c-deep);             /* the order panel / money field */
+  --panel-2: var(--c-deep);           /* controls inside the panel */
+  --panel-hair: #5A88B0;              /* hairlines inside the panel (decorative) */
+  --on-panel: var(--c-cream);
+  --tile: var(--c-cream);
+  --tile-on: var(--c-sky);            /* an item that is in the order */
+  --hair: var(--c-sage);              /* hairlines and the gaps between tiles */
+  --stripe: #ECE9C6;                  /* every other row in long lists */
+  --edge: var(--c-ink);               /* edges of inputs and buttons */
+  --rule: var(--c-ink);               /* thick structural rules */
+  --mark: var(--c-mustard);           /* the active filter, deals, notices */
+  --on-mark: var(--c-ink);
+  --action: var(--c-orange);
+  --on-action: var(--c-ink);
+  --action-edge: var(--c-ink);        /* orange on cream is 1.9:1, so it needs an ink edge there */
+  --danger: var(--c-brick);
+  --invert-bg: var(--c-ink);          /* the current tab, badges, the toast, warnings in the header */
+  --invert-fg: var(--c-cream);
+  --alert-bg: var(--c-brick);         /* failed sales: always with words */
+  --on-alert: var(--c-cream);
+  --scrim: rgba(16, 38, 61, .55);     /* flat tint behind popups: no blur */
+  --focus: var(--c-ink);
+  --focus-on-panel: var(--c-cream);
+  --qr-bg: var(--c-white);
+  --theme-color: #8CB9CE;             /* browser bar: matches --band (app.js reads it) */
+
+  /* type */
+  --font-sans: "Archivo", "Arial Black", Arial, sans-serif;
+  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
+  --wide: 125%;                       /* font-stretch for display and labels */
+  --track: .14em;                     /* label tracking */
+  --fs-label: 12px;
+  --fs-s: 14px;
+  --fs-m: 16px;
+  --fs-l: 20px;
+  --fs-xl: 28px;
+  --fs-2xl: 40px;
+  --fs-total: 22px;                   /* the sale total: just above the 16px subtotal */
+
+  /* space, size and rules */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --tap: 48px;                        /* minimum tap target */
+  --hair-w: 2px;
+  --edge-w: 2px;
+  --rule-w: 6px;
+  --header-h: 64px;
+  --banner-h: 48px;                   /* the support-session banner */
+  --panel-w: 400px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: var(--c-ground);
+  --surface: var(--c-ground-2);
+  --text: var(--c-cream);
+  --text-2: var(--c-muted-dark);
+  --accent-text: var(--c-sky);
+  --band: var(--c-ground-2);
+  --on-band: var(--c-cream);
+  --panel: var(--c-deep);
+  --panel-2: var(--c-deep);
+  --on-panel: var(--c-cream);
+  --tile: var(--c-ground);
+  --tile-on: var(--c-ground-2);
+  --hair: var(--c-line-dark);
+  --stripe: #122438;
+  --edge: var(--c-muted-dark);
+  --rule: var(--c-cream);
+  --mark: var(--c-mustard);
+  --on-mark: var(--c-ink);
+  --action: var(--c-orange);
+  --on-action: var(--c-ink);
+  --action-edge: var(--c-orange);
+  --danger: var(--c-brick-dark);
+  --invert-bg: var(--c-cream);
+  --invert-fg: var(--c-ink);
+  --alert-bg: var(--c-brick-dark);
+  --on-alert: var(--c-ink);
+  --scrim: rgba(0, 0, 0, .6);
+  --focus: var(--c-cream);
+  --focus-on-panel: var(--c-cream);
+  --theme-color: #132B44;
+}

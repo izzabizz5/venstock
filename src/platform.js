@@ -66,7 +66,8 @@ export async function handlePlatformApi({ request, db, params }) {
       const vendorHost = url.host.replace(/^admin\./, `${tenant.slug}.`);
       // The code goes in the URL fragment: browsers never send it to a server, never put it in a Referer header,
       // and it never appears in request logs. The vendor page removes it from the address bar and POSTs it.
-      return json({ id, expires_at: expires, link_expires_at: Date.now() + LINK_SECONDS * 1000, url: `${url.protocol}//${vendorHost}/#support=${code}` });
+      // link_seconds lets the admin page count down from when it got the link, whatever the staff computer's clock says.
+      return json({ id, expires_at: expires, link_expires_at: Date.now() + LINK_SECONDS * 1000, link_seconds: LINK_SECONDS, url:`${url.protocol}//${vendorHost}/#support=${code}` });
     }
 
     if (b === "support" && c && d === "end" && m === "POST") {

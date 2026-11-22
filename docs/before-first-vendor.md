@@ -82,6 +82,17 @@ These don't exist yet. Each needs code, tests and review (ask Claude to build th
   `site/` with its own `wrangler.toml`, static assets only, no D1 bindings, route `venstock.org/*`, never the vendor
   Worker. Its pages load no third-party scripts or embeds, send a strict `Content-Security-Policy` (only its own
   files), and set no cookies (see 11).
+  Built: `site/` (checked by `tests/site.unit.test.mjs`). Still to do, by you: fill in everything marked TODO in
+  `site/public/` (the home headline in `index.html`, the Stripe payment link and contact address in `join.html`, the
+  onboarding steps in `how.html`, `terms.html`, `privacy.html`), then deploy it from `site/` (`npx wrangler deploy`
+  there) once the vendor Worker's wildcard route is live.
+- [ ] **Stripe billing matches the pricing page** (`site/public/pricing.html` promises all of this):
+  - prices: $50 setup (one-time), $9 a month or $90 a year (recurring), $25 per 30 minutes of extra help;
+  - Stripe's **customer portal is turned on**, letting vendors update their card, switch between monthly and yearly,
+    and cancel;
+  - cancelling takes effect at the end of the paid period (not immediately), and Stripe emails receipts;
+  - after a vendor cancels, they keep access to the end of the paid period, then get 30 days to export their items
+    and sales before their data is deleted (`docs/runbook.md`: suspend, export, delete).
 
 ## 7. Drill: a remote migration that fails halfway keeps nothing
 Locally, a failing migration file is rolled back completely (`tests/migrate.test.mjs`). Cloudflare documents the
@@ -174,7 +185,7 @@ cd / && rm -rf /tmp/venstock-drill
 - [ ] Written down and agreed (fill in the decision from 1):
   - A **suspended** vendor's data is kept as is; they can still open the app and export failed sales.
   - A vendor that **leaves** gets their export first (`docs/runbook.md`, "Offboarding"), then is marked deleted.
-  - A **deleted** vendor's database is kept for ______ days (at least until the export has been delivered and
+  - A **deleted** vendor's database is kept for 30 days (at least until the export has been delivered and
     confirmed), then dropped by hand. Dropping is permanent; Time Travel can't bring back a deleted database.
   - The control database's audit log is kept forever (it is append-only; nothing can change or remove a row).
   - Venstock staff accounts that leave are disabled (`create-platform-admin.mjs --disable`), never deleted, so
