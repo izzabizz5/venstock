@@ -25,6 +25,7 @@ const ageLink = (id, seconds) => server.query("CONTROL", `UPDATE support_session
 test("the link says when it stops working: 60 seconds after it was made", async () => {
   const s = await start();
   assert.ok(Math.abs(s.link_expires_at - (Date.now() + 60_000)) < 5_000);
+  assert.equal(s.link_seconds, 60, "the admin page's countdown starts from this");
   assert.ok(s.expires_at - s.link_expires_at > 28 * 60_000, "the session itself lasts 30 minutes");
   assert.match(s.url, /^http:\/\/demo\.localhost:\d+\/#support=/, "the code is in the fragment, never the path or query");
 });
