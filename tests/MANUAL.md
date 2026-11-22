@@ -102,6 +102,23 @@ they are (tests/sync.unit.test.mjs covers the rules; this checks them in a real 
 6. Paste the link copied in step 2 into a new tab. Expected: an alert that the link is invalid, already used or expired.
 7. In a normal tab, log in at `http://demo.localhost:8788/` as demo's owner. Expected: no banner, everything normal.
 
+## Look and feel (docs/design.md), on a phone in sunlight if possible
+Fill demo first: `node scripts/seed-demo.mjs --replace` (local only; wipes demo's items, shows, sales and settings).
+1. Logged out: a deep-blue field with the stacked wordmark beside (desktop) or above (phone) the form. The header
+   shows only the Dark/Light button.
+2. Sell screen, desktop: sky header band, cream item tiles with sage gaps, deep-blue order panel. Tap items: each
+   fills sky blue with a count in its corner. The total is the largest thing on screen; Complete sale is orange.
+3. Phone (or a 390px window): the tabs sit along the bottom; a deep-blue bar above them shows the item count and
+   total. Tap it: the order slides up; the × closes it. Every button is easy to hit with a thumb.
+4. Checkout: payment is three joined buttons (the chosen one dark); Exact / $20 / $50 fill the cash box; Change due
+   is large. Confirm sale is orange with a dark edge.
+5. Press Dark: the whole app turns dark navy, text stays readable, the button now says Light; reload keeps it.
+   The browser's address bar colour follows (Android Chrome).
+6. With "reduce motion" on in the OS, the order sheet and toast appear without sliding.
+7. Nothing anywhere has rounded corners or soft shadows; no emoji appear as icons.
+8. Offline (developer tools → Network → Offline), reload: the fonts and colours are the same as online (they are
+   in the app-shell cache).
+
 ## Results
 | Check | Browser and version | Date | Result |
 |---|---|---|---|
