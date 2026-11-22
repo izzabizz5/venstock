@@ -1,6 +1,7 @@
 {
   "name": "venstock",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "description": "Offline-first point of sale for vendor shows. No dependencies: wrangler runs through npx.",
   "engines": {

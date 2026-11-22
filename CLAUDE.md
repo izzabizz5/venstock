@@ -205,4 +205,6 @@ user deploys it from `site/`; Claude never does, and never adds a deploy script 
 - `docs/design.md`: the design system (palette, contrast, type, rules). `design/preview/`: the two direction
   previews (A was chosen). `design/reference/` is gitignored third-party artwork: never commit it.
 - `scripts/seed-demo.mjs`: local-only demo data for vendor "demo" (refuses any remote target before opening anything).
-- `README.md`: what Venstock is, the vendor guide, how it works, local development and tests.
+- `README.md`: what Venstock is and the vendor guide only. Venstock is proprietary (`LICENSE`, all rights reserved):
+  the README must never explain how to run or host it. Development and operations notes go in `docs/development.md`
+  (internal), the launch checklist and the runbook.
